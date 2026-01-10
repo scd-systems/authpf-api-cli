@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -66,9 +65,12 @@ var userCreateCmd = &cobra.Command{
 			return fmt.Errorf("user %s already exists", username)
 		}
 
-		// Hash password with SHA256
-		hash := sha256.Sum256([]byte(password))
-		hashedPassword := hex.EncodeToString(hash[:])
+		// Hash password with bcrypt
+		hashedPasswordBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash password: %w", err)
+		}
+		hashedPassword := string(hashedPasswordBytes)
 
 		// Create user
 		if config.Rbac.Users == nil {
@@ -137,8 +139,11 @@ var userModifyCmd = &cobra.Command{
 
 		// Update password if provided
 		if password != "" {
-			hash := sha256.Sum256([]byte(password))
-			user.Password = hex.EncodeToString(hash[:])
+			hashedPasswordBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if err != nil {
+				return fmt.Errorf("failed to hash password: %w", err)
+			}
+			user.Password = string(hashedPasswordBytes)
 		}
 
 		// Update role if provided
@@ -162,9 +167,7 @@ var userModifyCmd = &cobra.Command{
 		fmt.Printf("User modified successfully:\n")
 		fmt.Printf("  Username: %s\n", username)
 		if password != "" {
-			hash := sha256.Sum256([]byte(password))
-			hashedPassword := hex.EncodeToString(hash[:])
-			fmt.Printf("  Password Hash: %s\n", hashedPassword)
+			fmt.Printf("  Password Hash: %s\n", user.Password)
 		}
 		if role != "" {
 			fmt.Printf("  Role: %s\n", role)
