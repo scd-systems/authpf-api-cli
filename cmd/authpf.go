@@ -22,6 +22,12 @@ type AuthPFStatus struct {
 	ExpiresAt time.Time `json:"expire_at"`
 }
 
+// AuthPFRulesResponse represents the API response with rules and server time
+type AuthPFRulesResponse struct {
+	Rules      map[string]*AuthPFStatus `json:"rules"`
+	ServerTime time.Time                `json:"server_time"`
+}
+
 var authpfCmd = &cobra.Command{
 	Use:   "authpf",
 	Short: "Manage authpf rules [client only]",
@@ -138,12 +144,34 @@ var authpfStatusCmd = &cobra.Command{
 			return nil
 		}
 
-		// Parse and format status
-		var status AuthPFStatus
-		statusBytes, _ := json.Marshal(statusData)
-		json.Unmarshal(statusBytes, &status)
+		// Parse response as AuthPFRulesResponse
+		apiResponse, ok := statusData.(*AuthPFRulesResponse)
+		if !ok {
+			fmt.Fprintf(cmd.OutOrStderr(), "Error: invalid response format\n")
+			return fmt.Errorf("")
+		}
 
-		fmt.Println(formatAuthPFStatus(&status))
+		// Check if rules map is empty
+		if len(apiResponse.Rules) == 0 {
+			fmt.Println("✗ AuthPF rule status: inactive")
+			fmt.Println("  No active rule found for this user")
+			return nil
+		}
+
+		// Get the first (and usually only) rule for the user
+		var status *AuthPFStatus
+		for _, rule := range apiResponse.Rules {
+			status = rule
+			break
+		}
+
+		if status == nil {
+			fmt.Println("✗ AuthPF rule status: inactive")
+			fmt.Println("  No active rule found for this user")
+			return nil
+		}
+
+		fmt.Println(formatAuthPFStatus(status, apiResponse.ServerTime))
 		return nil
 	},
 }
@@ -306,17 +334,18 @@ func getAuthPFRuleStatus(serverURL, token, username string) (interface{}, error)
 		return nil, fmt.Errorf("status check failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var result interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
+	// Parse response into AuthPFRulesResponse
+	var apiResponse AuthPFRulesResponse
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	return result, nil
+	// Return the response with server time for client-side calculations
+	return &apiResponse, nil
 }
 
 // formatAuthPFStatus formats the status for display
-func formatAuthPFStatus(status *AuthPFStatus) string {
+func formatAuthPFStatus(status *AuthPFStatus, serverTime time.Time) string {
 	// Format the output
 	output := fmt.Sprintf("✓ AuthPF rule status: active\n")
 	output += fmt.Sprintf("  Username: %s\n", status.Username)
@@ -326,8 +355,8 @@ func formatAuthPFStatus(status *AuthPFStatus) string {
 
 	// Format expire_at timestamp if available
 	if !status.ExpiresAt.IsZero() {
-		now := time.Now()
-		timeRemaining := status.ExpiresAt.Sub(now)
+		// Use server time for accurate calculation
+		timeRemaining := status.ExpiresAt.Sub(serverTime)
 
 		output += fmt.Sprintf("  Rules Expire At: %s\n", status.ExpiresAt.Format("2006-01-02 03:04 PM"))
 		output += fmt.Sprintf("  Rules Expire In: %s", formatDuration(timeRemaining))

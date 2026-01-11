@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	yaml "gopkg.in/yaml.v3"
 )
 
 var authCmd = &cobra.Command{
@@ -29,6 +32,41 @@ var authLoginCmd = &cobra.Command{
 		serverURL, _ := cmd.Flags().GetString("server")
 		username, _ := cmd.Flags().GetString("username")
 		password, _ := cmd.Flags().GetString("password")
+		caCertPath, _ := cmd.Flags().GetString("ca-cert")
+		insecure, _ := cmd.Flags().GetBool("insecure")
+
+		// Try to load credentials from environment variables first
+		if serverURL == "" {
+			serverURL = os.Getenv("AUTHPF_API_SERVER")
+		}
+		if username == "" {
+			username = os.Getenv("AUTHPF_API_USERNAME")
+		}
+		if password == "" {
+			password = os.Getenv("AUTHPF_API_PASSWORD")
+		}
+
+		// Try to load credentials from file if not provided via flags or environment variables
+		if serverURL == "" || username == "" || password == "" || (caCertPath == "" && !insecure) {
+			creds, err := loadCredentialsFromFile()
+			if err == nil {
+				if serverURL == "" {
+					serverURL = creds.Server
+				}
+				if username == "" {
+					username = creds.Username
+				}
+				if password == "" {
+					password = creds.Password
+				}
+				if caCertPath == "" && !insecure {
+					caCertPath = creds.CACert
+					if creds.Insecure {
+						insecure = true
+					}
+				}
+			}
+		}
 
 		if serverURL == "" {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: server URL is required\n")
@@ -46,7 +84,7 @@ var authLoginCmd = &cobra.Command{
 		}
 
 		// Perform login
-		token, err := performLogin(serverURL, username, password)
+		token, err := performLogin(serverURL, username, password, caCertPath, insecure)
 		if err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
 			return fmt.Errorf("")
@@ -60,6 +98,16 @@ var authLoginCmd = &cobra.Command{
 			return fmt.Errorf("")
 		}
 		fmt.Println("✓ Token saved to config file")
+
+		// Save credentials to credentials file if provided via flags
+		if serverURL != "" && username != "" && password != "" {
+			if err := saveCredentialsToFile(serverURL, username, password, caCertPath, insecure); err != nil {
+				fmt.Fprintf(cmd.OutOrStderr(), "Warning: failed to save credentials file: %v\n", err)
+				// Don't fail the login if credentials file save fails
+			} else {
+				fmt.Println("✓ Credentials saved to credentials file")
+			}
+		}
 
 		return nil
 	},
@@ -123,6 +171,8 @@ func init() {
 	authLoginCmd.Flags().StringP("server", "s", "", "Server URL")
 	authLoginCmd.Flags().StringP("username", "u", "", "Username")
 	authLoginCmd.Flags().StringP("password", "p", "", "Password")
+	authLoginCmd.Flags().StringP("ca-cert", "c", "", "Path to CA certificate file for HTTPS verification")
+	authLoginCmd.Flags().BoolP("insecure", "i", false, "Skip HTTPS certificate verification (insecure, use with caution)")
 
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authLogoutCmd)
@@ -131,7 +181,7 @@ func init() {
 }
 
 // performLogin authenticates against the server and returns a JWT token
-func performLogin(serverURL, username, password string) (string, error) {
+func performLogin(serverURL, username, password, caCertPath string, insecure bool) (string, error) {
 
 	fmt.Printf("Authenticating against %s...\n", serverURL)
 
@@ -157,8 +207,26 @@ func performLogin(serverURL, username, password string) (string, error) {
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 
-	// Send request
+	// Create HTTP client with optional CA certificate or insecure mode
 	client := &http.Client{}
+	if insecure {
+		// Skip certificate verification (insecure mode)
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	} else if caCertPath != "" {
+		tlsConfig, err := createTLSConfig(caCertPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to configure TLS: %w", err)
+		}
+		client.Transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+	}
+
+	// Send request
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send login request: %w", err)
@@ -231,6 +299,122 @@ func clearAuthToken() error {
 
 	if err := viper.WriteConfigAs(configFile); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// Credentials represents the structure of the credentials file
+type Credentials struct {
+	Server   string `yaml:"server" json:"server"`
+	Username string `yaml:"username" json:"username"`
+	Password string `yaml:"password" json:"password"`
+	CACert   string `yaml:"ca_cert" json:"ca_cert"`
+	Insecure bool   `yaml:"insecure" json:"insecure"`
+}
+
+// loadCredentialsFromFile loads credentials from the credentials file
+// The file is expected to be in the same directory as the config file
+// with the name "credentials.yaml" and permissions 0600
+func loadCredentialsFromFile() (*Credentials, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	configDir := filepath.Join(home, ".authpf-api-cli")
+	credentialsFile := filepath.Join(configDir, "credentials.yaml")
+
+	// Check if file exists
+	if _, err := os.Stat(credentialsFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf("credentials file not found at %s", credentialsFile)
+	}
+
+	// Check file permissions (should be 0600)
+	fileInfo, err := os.Stat(credentialsFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat credentials file: %w", err)
+	}
+
+	mode := fileInfo.Mode().Perm()
+	if mode != 0600 {
+		return nil, fmt.Errorf("credentials file has incorrect permissions: %o (expected 0600)", mode)
+	}
+
+	// Read file
+	data, err := os.ReadFile(credentialsFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read credentials file: %w", err)
+	}
+
+	// Parse YAML
+	var creds Credentials
+	if err := yaml.Unmarshal(data, &creds); err != nil {
+		return nil, fmt.Errorf("failed to parse credentials file: %w", err)
+	}
+
+	// Validate credentials
+	if creds.Server == "" || creds.Username == "" || creds.Password == "" {
+		return nil, fmt.Errorf("credentials file is missing required fields (server, username, password)")
+	}
+
+	return &creds, nil
+}
+
+// createTLSConfig creates a TLS configuration with a custom CA certificate
+func createTLSConfig(caCertPath string) (*tls.Config, error) {
+	// Read the CA certificate file
+	caCert, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA certificate file: %w", err)
+	}
+
+	// Create a certificate pool and add the CA certificate
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to parse CA certificate")
+	}
+
+	// Create TLS configuration
+	tlsConfig := &tls.Config{
+		RootCAs: caCertPool,
+	}
+
+	return tlsConfig, nil
+}
+
+// saveCredentialsToFile saves credentials to the credentials file with 0600 permissions
+func saveCredentialsToFile(server, username, password, caCertPath string, insecure bool) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	configDir := filepath.Join(home, ".authpf-api-cli")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	credentialsFile := filepath.Join(configDir, "credentials.yaml")
+
+	// Create credentials structure
+	creds := Credentials{
+		Server:   server,
+		Username: username,
+		Password: password,
+		CACert:   caCertPath,
+		Insecure: insecure,
+	}
+
+	// Marshal to YAML
+	data, err := yaml.Marshal(&creds)
+	if err != nil {
+		return fmt.Errorf("failed to marshal credentials: %w", err)
+	}
+
+	// Write file with 0600 permissions
+	if err := os.WriteFile(credentialsFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write credentials file: %w", err)
 	}
 
 	return nil
