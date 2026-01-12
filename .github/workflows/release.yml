@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [freebsd, openbsd, linux]
+        os: [freebsd, openbsd, linux, darwin, windows]
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4

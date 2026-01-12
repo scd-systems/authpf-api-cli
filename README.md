@@ -1,4 +1,4 @@
-# authpf-cli
+# authpf-api-cli
 
 A command-line tool for managing the authpf-api server and client operations.
 
@@ -6,7 +6,7 @@ A command-line tool for managing the authpf-api server and client operations.
 
 - **User Management**: Create, modify, and delete users with password hashing
 - **Configuration Management**: Check and validate server configuration
-- **Rule Management**: Activate, deactivate, and manage authpf rules
+- **Rule Management**: Activate, deactivate pf user rules
 - **Status Monitoring**: Check server and client status, view active sessions and loaded rules
 - **Authentication**: Login/logout and manage JWT tokens
 
@@ -15,15 +15,8 @@ A command-line tool for managing the authpf-api server and client operations.
 ### Build from source
 
 ```bash
-cd authapi-cli
-go build -o authpf-cli
-```
-
-### Install globally
-
-```bash
-cd authapi-cli
-go install
+cd authpf-api-cli
+make build
 ```
 
 ## Usage
@@ -34,61 +27,29 @@ go install
 
 ```bash
 # Create a new user
-authpf-cli user create --username john --password mypassword --role user
+authpf-api-cli user create --username john --password mypassword --role user
 
 # Modify a user
-authpf-cli user modify --username john --password newpassword --role admin
+authpf-api-cli user modify --username john --password newpassword --role admin
 
 # Delete a user
-authpf-cli user delete --username john
+authpf-api-cli user delete --username john
 
 # List all users
-authpf-cli user list
+authpf-api-cli user list
 ```
 
 #### Configuration
 
 ```bash
 # Check configuration
-authpf-cli config check
+authpf-api-cli config check
 
 # Validate configuration
-authpf-cli config validate
+authpf-api-cli config validate
 
 # Show configuration
-authpf-cli config show
-```
-
-#### Rules Management
-
-```bash
-# List available rules
-authpf-cli rules list
-
-# List loaded rules
-authpf-cli rules list --loaded
-
-# Validate rules
-authpf-cli rules validate
-
-# Show rule content
-authpf-cli rules show --rule user1
-
-# Activate a rule (server mode)
-authpf-cli rules activate --rule user1 --username john --user-ip 192.168.1.100
-```
-
-#### Status
-
-```bash
-# Check server status
-authpf-cli status server
-
-# List active sessions
-authpf-cli status sessions
-
-# List loaded rules
-authpf-cli status rules
+authpf-api-cli config show
 ```
 
 ### Client Mode (Remote Operations)
@@ -97,35 +58,32 @@ authpf-cli status rules
 
 ```bash
 # Login to server
-authpf-cli auth login --server https://api.example.com --username john --password mypassword
+authpf-api-cli auth login --server https://api.example.com --username john --password mypassword
 
 # Save token for future use
-authpf-cli auth login --server https://api.example.com --username john --password mypassword --save
+authpf-api-cli auth login --server https://api.example.com --username john --password mypassword --save
 
 # Check authentication status
-authpf-cli auth status
+authpf-api-cli auth status
 
 # Logout
-authpf-cli auth logout
+authpf-api-cli auth logout
 ```
 
-#### Remote Operations
+#### Authpf API Operations
 
 ```bash
 # Activate a rule on remote server
-authpf-cli rules activate --server https://api.example.com --token <jwt-token> --rule user1 --user-ip 192.168.1.100
+authpf-api-cli authpf activate
+
+# Activate a rule on remote server with specific timeout for 1h
+authpf-api-cli authpf activate -t 1h
 
 # Deactivate a rule on remote server
-authpf-cli rules deactivate --server https://api.example.com --token <jwt-token> --rule user1
-
-# List rules from remote server
-authpf-cli rules list --server https://api.example.com --token <jwt-token>
-
-# Check remote server status
-authpf-cli status server --server https://api.example.com
+authpf-api-cli authpf deactivate
 
 # Check client connection status
-authpf-cli status client --server https://api.example.com --token <jwt-token>
+authpf-api-cli authpf status
 ```
 
 ## Configuration
@@ -134,7 +92,7 @@ The CLI can be configured via:
 
 1. **Command-line flags** (highest priority)
 2. **Environment variables**
-3. **Config file** at `~/.authpf-cli/config.yaml`
+3. **Config file** at `~/.authpf-api-cli/config.yaml`
 
 ### Config File Example
 
@@ -149,93 +107,48 @@ server:
   logfile: /var/log/authpf-api.log
 ```
 
-## Global Flags
-
-```
---config string    Config file (default is $HOME/.authpf-cli.yaml)
--v, --verbose      Verbose output
---help             Show help message
---version          Show version
-```
-
-## Examples
-
-### Complete Server Setup Workflow
-
-```bash
-# 1. Create users
-authpf-cli user create --username alice --password pass123 --role user
-authpf-cli user create --username bob --password pass456 --role admin
-
-# 2. Validate configuration
-authpf-cli config validate
-
-# 3. Check server status
-authpf-cli status server
-
-# 4. List loaded rules
-authpf-cli status rules
-```
-
 ### Complete Client Workflow
 
 ```bash
 # 1. Login
-authpf-cli auth login --server https://api.example.com --username alice --password pass123 --save
+authpf-api-cli auth login --server https://api.example.com --username alice --password pass123 --save
 
 # 2. Check authentication
-authpf-cli auth status
+authpf-api-cli auth status
 
 # 3. Activate your rules
-authpf-cli rules activate --server https://api.example.com --rule user1 --user-ip 192.168.1.100
+authpf-api-cli authpf activate
 
 # 4. Check status
-authpf-cli status client --server https://api.example.com
+authpf-api-cli authpf status
 
-# 5. List your active rules
-authpf-cli rules list --server https://api.example.com --loaded
+# 5. Deactivate rules when done
+authpf-api-cli authpf deactivate
 
-# 6. Deactivate rules when done
-authpf-cli rules deactivate --server https://api.example.com --rule user1
-
-# 7. Logout
-authpf-cli auth logout
+# 6. Logout
+authpf-api-cli auth logout
 ```
 
 ## Development
-
-### Project Structure
-
-```
-authapi-cli/
-├── cmd/
-│   ├── root.go       # Root command
-│   ├── user.go       # User management commands
-│   ├── config.go     # Configuration commands
-│   ├── rules.go      # Rules management commands
-│   ├── status.go     # Status commands
-│   └── auth.go       # Authentication commands
-├── main.go           # Entry point
-├── go.mod            # Go module definition
-└── README.md         # This file
-```
 
 ### Building
 
 ```bash
 # Build for current platform
-go build -o authpf-cli
+make build
 
 # Build for specific platform
-GOOS=freebsd GOARCH=amd64 go build -o authpf-cli-freebsd
+make build GOOS=freebsd GOARCH=amd64
 
 # Build with version info
-go build -ldflags="-X main.Version=1.0.0" -o authpf-cli
+go build -ldflags="-X main.Version=1.0.0" -o authpf-api-cli
 ```
 
 ## License
 
-Same as authpf-api
+BSD 3-Clause License
+
+See [License](LICENSE)
 
 ## Contributing
 
