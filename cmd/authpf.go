@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -193,6 +194,33 @@ func init() {
 	authpfCmd.AddCommand(authpfStatusCmd)
 }
 
+// getHTTPClientWithTLS creates an HTTP client with optional CA certificate or insecure mode
+func getHTTPClientWithTLS() (*http.Client, error) {
+	caCertPath := viper.GetString("auth.ca_cert")
+	insecure := viper.GetBool("auth.insecure")
+
+	client := &http.Client{}
+
+	if insecure {
+		// Skip certificate verification (insecure mode)
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	} else if caCertPath != "" {
+		tlsConfig, err := createTLSConfig(caCertPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to configure TLS: %w", err)
+		}
+		client.Transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+	}
+
+	return client, nil
+}
+
 // activateAuthPFRule sends a POST request to activate an authpf rule
 func activateAuthPFRule(serverURL, token, username, timeout string) error {
 	// Build query parameters
@@ -221,7 +249,10 @@ func activateAuthPFRule(serverURL, token, username, timeout string) error {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
-	client := &http.Client{}
+	client, err := getHTTPClientWithTLS()
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
@@ -271,7 +302,10 @@ func deactivateAuthPFRule(serverURL, token, username string, all bool) error {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
-	client := &http.Client{}
+	client, err := getHTTPClientWithTLS()
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
@@ -316,7 +350,10 @@ func getAuthPFRuleStatus(serverURL, token, username string) (interface{}, error)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
-	client := &http.Client{}
+	client, err := getHTTPClientWithTLS()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
