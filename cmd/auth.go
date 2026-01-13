@@ -45,25 +45,19 @@ var authLoginCmd = &cobra.Command{
 		if password == "" {
 			password = os.Getenv("AUTHPF_API_PASSWORD")
 		}
+		if caCertPath == "" {
+			caCertPath = os.Getenv("AUTHPF_API_CACERT")
+		}
 
 		// Try to load credentials from file if not provided via flags or environment variables
-		if serverURL == "" || username == "" || password == "" || (caCertPath == "" && !insecure) {
+		if username == "" || password == "" {
 			creds, err := loadCredentialsFromFile()
 			if err == nil {
-				if serverURL == "" {
-					serverURL = creds.Server
-				}
 				if username == "" {
 					username = creds.Username
 				}
 				if password == "" {
 					password = creds.Password
-				}
-				if caCertPath == "" && !insecure {
-					caCertPath = creds.CACert
-					if creds.Insecure {
-						insecure = true
-					}
 				}
 			}
 		}
@@ -92,16 +86,16 @@ var authLoginCmd = &cobra.Command{
 
 		fmt.Printf("✓ Successfully logged in as %s\n", username)
 
-		// Save token to config file automatically
-		if err := saveAuthToken(serverURL, username, token); err != nil {
+		// Save token and auth settings to config file automatically
+		if err := saveAuthToken(serverURL, username, token, caCertPath, insecure); err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: failed to save token: %v\n", err)
 			return fmt.Errorf("")
 		}
 		fmt.Println("✓ Token saved to config file")
 
 		// Save credentials to credentials file if provided via flags
-		if serverURL != "" && username != "" && password != "" {
-			if err := saveCredentialsToFile(serverURL, username, password, caCertPath, insecure); err != nil {
+		if username != "" && password != "" {
+			if err := saveCredentialsToFile(username, password); err != nil {
 				fmt.Fprintf(cmd.OutOrStderr(), "Warning: failed to save credentials file: %v\n", err)
 				// Don't fail the login if credentials file save fails
 			} else {
@@ -258,8 +252,8 @@ func performLogin(serverURL, username, password, caCertPath string, insecure boo
 	return token, nil
 }
 
-// saveAuthToken saves the authentication token to the config file
-func saveAuthToken(serverURL, username, token string) error {
+// saveAuthToken saves the authentication token and auth settings to the config file
+func saveAuthToken(serverURL, username, token, caCertPath string, insecure bool) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -273,8 +267,9 @@ func saveAuthToken(serverURL, username, token string) error {
 	configFile := filepath.Join(configDir, "config.yaml")
 
 	viper.Set("auth.server", serverURL)
-	viper.Set("auth.username", username)
 	viper.Set("auth.token", token)
+	viper.Set("auth.ca_cert", caCertPath)
+	viper.Set("auth.insecure", insecure)
 
 	if err := viper.WriteConfigAs(configFile); err != nil {
 		return err
@@ -306,11 +301,8 @@ func clearAuthToken() error {
 
 // Credentials represents the structure of the credentials file
 type Credentials struct {
-	Server   string `yaml:"server" json:"server"`
 	Username string `yaml:"username" json:"username"`
 	Password string `yaml:"password" json:"password"`
-	CACert   string `yaml:"ca_cert" json:"ca_cert"`
-	Insecure bool   `yaml:"insecure" json:"insecure"`
 }
 
 // loadCredentialsFromFile loads credentials from the credentials file
@@ -354,8 +346,8 @@ func loadCredentialsFromFile() (*Credentials, error) {
 	}
 
 	// Validate credentials
-	if creds.Server == "" || creds.Username == "" || creds.Password == "" {
-		return nil, fmt.Errorf("credentials file is missing required fields (server, username, password)")
+	if creds.Username == "" || creds.Password == "" {
+		return nil, fmt.Errorf("credentials file is missing required fields (username, password)")
 	}
 
 	return &creds, nil
@@ -384,7 +376,7 @@ func createTLSConfig(caCertPath string) (*tls.Config, error) {
 }
 
 // saveCredentialsToFile saves credentials to the credentials file with 0600 permissions
-func saveCredentialsToFile(server, username, password, caCertPath string, insecure bool) error {
+func saveCredentialsToFile(username, password string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
@@ -399,11 +391,8 @@ func saveCredentialsToFile(server, username, password, caCertPath string, insecu
 
 	// Create credentials structure
 	creds := Credentials{
-		Server:   server,
 		Username: username,
 		Password: password,
-		CACert:   caCertPath,
-		Insecure: insecure,
 	}
 
 	// Marshal to YAML
