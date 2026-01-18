@@ -11,25 +11,28 @@ import (
 var (
 	cfgFile string
 	verbose bool
+	version string
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "authpf-api-cli",
 	Short: "authpf-api CLI tool for user and rule management",
 	Long: `authpf-api-cli is a command-line tool for managing authpf-api.
-It can be used both on the server (for user and rule management) 
+It can be used both on the server (for user and rule management)
 and on the client (for authentication and rule loading).`,
-	Version: "0.1.0",
+	Version: version,
 }
 
-func Execute() error {
+func Execute(ver string) error {
+	version = ver
+	rootCmd.Version = ver
 	return rootCmd.Execute()
 }
 
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.authpf-api-cli.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.authpf-api-cli/config.yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	rootCmd.AddCommand(userCmd)

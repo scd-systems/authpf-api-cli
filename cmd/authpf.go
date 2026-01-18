@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -124,6 +125,7 @@ var authpfStatusCmd = &cobra.Command{
 
 		// Get optional parameters
 		authpfUsername, _ := cmd.Flags().GetString("username")
+		all, _ := cmd.Flags().GetBool("all")
 
 		// Use provided username or fall back to authenticated user
 		if authpfUsername == "" {
@@ -131,7 +133,7 @@ var authpfStatusCmd = &cobra.Command{
 		}
 
 		// Call status endpoint
-		statusData, err := getAuthPFRuleStatus(serverURL, token, authpfUsername)
+		statusData, err := getAuthPFRuleStatus(serverURL, token, authpfUsername, all)
 		if err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
 			return fmt.Errorf("")
@@ -140,7 +142,7 @@ var authpfStatusCmd = &cobra.Command{
 		// Check if status is nil (no active rule)
 		if statusData == nil {
 			fmt.Println("✗ AuthPF rule status: inactive")
-			fmt.Println("  No active rule found for this user")
+			fmt.Println("  No active rule found")
 			return nil
 		}
 
@@ -154,24 +156,34 @@ var authpfStatusCmd = &cobra.Command{
 		// Check if rules map is empty
 		if len(apiResponse.Rules) == 0 {
 			fmt.Println("✗ AuthPF rule status: inactive")
-			fmt.Println("  No active rule found for this user")
+			fmt.Println("  No active rule found")
 			return nil
 		}
 
-		// Get the first (and usually only) rule for the user
-		var status *AuthPFStatus
-		for _, rule := range apiResponse.Rules {
-			status = rule
-			break
-		}
+		// If --all flag is set, display all rules
+		if all {
+			fmt.Println("✓ AuthPF rules status: active")
+			fmt.Printf("  Total active rules: %d\n\n", len(apiResponse.Rules))
+			for ruleKey, status := range apiResponse.Rules {
+				fmt.Printf("  Rule: %s\n", ruleKey)
+				fmt.Println(formatAuthPFStatusDetailed(status, apiResponse.ServerTime))
+			}
+		} else {
+			// Get the first (and usually only) rule for the user
+			var status *AuthPFStatus
+			for _, rule := range apiResponse.Rules {
+				status = rule
+				break
+			}
 
-		if status == nil {
-			fmt.Println("✗ AuthPF rule status: inactive")
-			fmt.Println("  No active rule found for this user")
-			return nil
-		}
+			if status == nil {
+				fmt.Println("✗ AuthPF rule status: inactive")
+				fmt.Println("  No active rule found")
+				return nil
+			}
 
-		fmt.Println(formatAuthPFStatus(status, apiResponse.ServerTime))
+			fmt.Println(formatAuthPFStatus(status, apiResponse.ServerTime))
+		}
 		return nil
 	},
 }
@@ -187,10 +199,38 @@ func init() {
 
 	// Status command
 	authpfStatusCmd.Flags().StringP("username", "u", "", "Username (optional, defaults to authenticated user)")
+	authpfStatusCmd.Flags().BoolP("all", "a", false, "Get status for all rules")
 
 	authpfCmd.AddCommand(authpfActivateCmd)
 	authpfCmd.AddCommand(authpfDeactivateCmd)
 	authpfCmd.AddCommand(authpfStatusCmd)
+}
+
+// getHTTPClientWithTLS creates an HTTP client with optional CA certificate or insecure mode
+func getHTTPClientWithTLS() (*http.Client, error) {
+	caCertPath := viper.GetString("auth.ca_cert")
+	insecure := viper.GetBool("auth.insecure")
+
+	client := &http.Client{}
+
+	if insecure {
+		// Skip certificate verification (insecure mode)
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	} else if caCertPath != "" {
+		tlsConfig, err := createTLSConfig(caCertPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to configure TLS: %w", err)
+		}
+		client.Transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+	}
+
+	return client, nil
 }
 
 // activateAuthPFRule sends a POST request to activate an authpf rule
@@ -221,7 +261,10 @@ func activateAuthPFRule(serverURL, token, username, timeout string) error {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
-	client := &http.Client{}
+	client, err := getHTTPClientWithTLS()
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
@@ -271,7 +314,10 @@ func deactivateAuthPFRule(serverURL, token, username string, all bool) error {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
-	client := &http.Client{}
+	client, err := getHTTPClientWithTLS()
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
@@ -293,7 +339,7 @@ func deactivateAuthPFRule(serverURL, token, username string, all bool) error {
 }
 
 // getAuthPFRuleStatus sends a GET request to check authpf rule status
-func getAuthPFRuleStatus(serverURL, token, username string) (interface{}, error) {
+func getAuthPFRuleStatus(serverURL, token, username string, all bool) (interface{}, error) {
 	// Build query parameters
 	params := url.Values{}
 	if username != "" {
@@ -302,6 +348,10 @@ func getAuthPFRuleStatus(serverURL, token, username string) (interface{}, error)
 
 	// Build URL
 	endpoint := serverURL + "/api/v1/authpf/activate"
+	if all {
+		endpoint = serverURL + "/api/v1/authpf/all"
+	}
+
 	if len(params) > 0 {
 		endpoint += "?" + params.Encode()
 	}
@@ -316,7 +366,10 @@ func getAuthPFRuleStatus(serverURL, token, username string) (interface{}, error)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
-	client := &http.Client{}
+	client, err := getHTTPClientWithTLS()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
@@ -360,6 +413,26 @@ func formatAuthPFStatus(status *AuthPFStatus, serverTime time.Time) string {
 
 		output += fmt.Sprintf("  Rules Expire At: %s\n", status.ExpiresAt.Format("2006-01-02 03:04 PM"))
 		output += fmt.Sprintf("  Rules Expire In: %s", formatDuration(timeRemaining))
+	}
+
+	return output
+}
+
+// formatAuthPFStatusDetailed formats the status for display in a list (with extra indentation)
+func formatAuthPFStatusDetailed(status *AuthPFStatus, serverTime time.Time) string {
+	// Format the output with extra indentation for list display
+	output := fmt.Sprintf("    Username: %s\n", status.Username)
+	output += fmt.Sprintf("    UserIP: %s\n", status.UserIP)
+	output += fmt.Sprintf("    UserID: %d\n", status.UserID)
+	output += fmt.Sprintf("    Timeout: %s\n", status.Timeout)
+
+	// Format expire_at timestamp if available
+	if !status.ExpiresAt.IsZero() {
+		// Use server time for accurate calculation
+		timeRemaining := status.ExpiresAt.Sub(serverTime)
+
+		output += fmt.Sprintf("    Rules Expire At: %s\n", status.ExpiresAt.Format("2006-01-02 03:04 PM"))
+		output += fmt.Sprintf("    Rules Expire In: %s\n", formatDuration(timeRemaining))
 	}
 
 	return output

@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -65,10 +64,9 @@ var userCreateCmd = &cobra.Command{
 			return fmt.Errorf("user %s already exists", username)
 		}
 
-		// Hash password with bcrypt
-		hashedPasswordBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		hashedPasswordBytes, err := createPwHash(password)
 		if err != nil {
-			return fmt.Errorf("failed to hash password: %w", err)
+			return err
 		}
 		hashedPassword := string(hashedPasswordBytes)
 
@@ -139,9 +137,9 @@ var userModifyCmd = &cobra.Command{
 
 		// Update password if provided
 		if password != "" {
-			hashedPasswordBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			hashedPasswordBytes, err := createPwHash(password)
 			if err != nil {
-				return fmt.Errorf("failed to hash password: %w", err)
+				return err
 			}
 			user.Password = string(hashedPasswordBytes)
 		}
