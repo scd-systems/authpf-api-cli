@@ -49,6 +49,15 @@ var authLoginCmd = &cobra.Command{
 			caCertPath = os.Getenv("AUTHPF_API_CACERT")
 		}
 
+		// hash password if set
+		if len(password) > 0 {
+			pwHash, err := createSha256(password)
+			if err != nil {
+				return err
+			}
+			password = pwHash
+		}
+
 		// Try to load credentials from file if not provided via flags or environment variables
 		if username == "" || password == "" {
 			creds, err := loadCredentialsFromFile()
