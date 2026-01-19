@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
 
@@ -550,9 +551,7 @@ func TestConfigPathHandling(t *testing.T) {
 		t.Fatalf("loadConfig() with custom path failed: %v", err)
 	}
 
-	if config == nil {
-		t.Errorf("loadConfig() returned nil config")
-	}
+	assert.NotNil(t, config)
 
 	// Test saving to custom path
 	config.Rbac.Users = map[string]ConfigFileRbacUsers{

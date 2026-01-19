@@ -66,7 +66,7 @@ var authpfActivateCmd = &cobra.Command{
 			return fmt.Errorf("")
 		}
 
-		fmt.Println("✓ AuthPF rule activated successfully")
+		fmt.Println("✅ AuthPF rule activated successfully")
 		return nil
 	},
 }
@@ -102,7 +102,7 @@ var authpfDeactivateCmd = &cobra.Command{
 			return fmt.Errorf("")
 		}
 
-		fmt.Println("✓ AuthPF rule deactivated successfully")
+		fmt.Println("✅ AuthPF rule deactivated successfully")
 		return nil
 	},
 }
@@ -141,7 +141,7 @@ var authpfStatusCmd = &cobra.Command{
 
 		// Check if status is nil (no active rule)
 		if statusData == nil {
-			fmt.Println("✗ AuthPF rule status: inactive")
+			fmt.Println("❌ AuthPF rule status: inactive")
 			fmt.Println("  No active rule found")
 			return nil
 		}
@@ -155,14 +155,14 @@ var authpfStatusCmd = &cobra.Command{
 
 		// Check if rules map is empty
 		if len(apiResponse.Rules) == 0 {
-			fmt.Println("✗ AuthPF rule status: inactive")
+			fmt.Println("❌ AuthPF rule status: inactive")
 			fmt.Println("  No active rule found")
 			return nil
 		}
 
 		// If --all flag is set, display all rules
 		if all {
-			fmt.Println("✓ AuthPF rules status: active")
+			fmt.Println("✅ AuthPF rules status: active")
 			fmt.Printf("  Total active rules: %d\n\n", len(apiResponse.Rules))
 			for ruleKey, status := range apiResponse.Rules {
 				fmt.Printf("  Rule: %s\n", ruleKey)
@@ -177,7 +177,7 @@ var authpfStatusCmd = &cobra.Command{
 			}
 
 			if status == nil {
-				fmt.Println("✗ AuthPF rule status: inactive")
+				fmt.Println("❌ AuthPF rule status: inactive")
 				fmt.Println("  No active rule found")
 				return nil
 			}
@@ -400,7 +400,7 @@ func getAuthPFRuleStatus(serverURL, token, username string, all bool) (interface
 // formatAuthPFStatus formats the status for display
 func formatAuthPFStatus(status *AuthPFStatus, serverTime time.Time) string {
 	// Format the output
-	output := fmt.Sprintf("✓ AuthPF rule status: active\n")
+	output := "✅ AuthPF rule status: active\n"
 	output += fmt.Sprintf("  Username: %s\n", status.Username)
 	output += fmt.Sprintf("  UserIP: %s\n", status.UserIP)
 	output += fmt.Sprintf("  UserID: %d\n", status.UserID)

@@ -8,26 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ConfigFile represents the structure of authpf-api.conf
-type ConfigFile struct {
-	Rbac ConfigFileRbac `yaml:"rbac"`
-}
-
-type ConfigFileRbac struct {
-	Roles map[string]ConfigFileRbacRoles `yaml:"roles"`
-	Users map[string]ConfigFileRbacUsers `yaml:"users"`
-}
-
-type ConfigFileRbacRoles struct {
-	Permissions []string `yaml:"permissions"`
-}
-
-type ConfigFileRbacUsers struct {
-	Password string `yaml:"password"`
-	Role     string `yaml:"role"`
-	UserID   int    `yaml:"userId,omitempty"`
-}
-
 var userCmd = &cobra.Command{
 	Use:   "user",
 	Short: "Manage users [server only]",

@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	yaml "gopkg.in/yaml.v3"
@@ -93,14 +95,14 @@ var authLoginCmd = &cobra.Command{
 			return fmt.Errorf("")
 		}
 
-		fmt.Printf("✓ Successfully logged in as %s\n", username)
+		fmt.Printf("✅ Successfully logged in as %s\n", username)
 
 		// Save token and auth settings to config file automatically
 		if err := saveAuthToken(serverURL, username, token, caCertPath, insecure); err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: failed to save token: %v\n", err)
 			return fmt.Errorf("")
 		}
-		fmt.Println("✓ Token saved to config file")
+		fmt.Println("✅ Token saved to config file")
 
 		// Save credentials to credentials file if provided via flags
 		if username != "" && password != "" {
@@ -108,7 +110,7 @@ var authLoginCmd = &cobra.Command{
 				fmt.Fprintf(cmd.OutOrStderr(), "Warning: failed to save credentials file: %v\n", err)
 				// Don't fail the login if credentials file save fails
 			} else {
-				fmt.Println("✓ Credentials saved to credentials file")
+				fmt.Println("✅ Credentials saved to credentials file")
 			}
 		}
 
@@ -125,7 +127,7 @@ var authLogoutCmd = &cobra.Command{
 			return fmt.Errorf("failed to logout: %w", err)
 		}
 
-		fmt.Println("✓ Successfully logged out")
+		fmt.Println("✅ Successfully logged out")
 		return nil
 	},
 }
@@ -133,20 +135,37 @@ var authLogoutCmd = &cobra.Command{
 var authStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check authentication status",
-	Long:  "Check if you are currently authenticated",
+	Long:  "Check if you are currently authenticated and validate token against server",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token := viper.GetString("auth.token")
-		username := viper.GetString("auth.username")
+		// username := viper.GetString("auth.username")
 		server := viper.GetString("auth.server")
+		caCertPath := viper.GetString("auth.ca_cert")
+		insecure := viper.GetBool("auth.insecure")
 
 		if token == "" {
-			fmt.Println("Authentication Status: ✗ Not authenticated")
+			fmt.Println("Authentication Status: ❌ Not authenticated")
 			return nil
 		}
 
-		fmt.Println("Authentication Status: ✓ Authenticated")
-		fmt.Printf("  Username: %s\n", username)
-		fmt.Printf("  Server: %s\n", server)
+		// Validate token against server
+		isValid, expiresAt, err := validateTokenAgainstServer(server, token, caCertPath, insecure)
+		if err != nil {
+			fmt.Printf("  Token Validation: ⚠️ Warning - %v\n", err)
+		} else if isValid {
+			fmt.Println("  Token Validation: ✅ Valid")
+			if !expiresAt.IsZero() {
+				duration := time.Until(expiresAt)
+				if duration > 0 {
+					fmt.Printf("  Expires in: %s\n", formatDuration(duration))
+					fmt.Printf("  Expires at: %s\n", expiresAt.Format("2006-01-02 15:04:05 MST"))
+				} else {
+					fmt.Println("  Token Status: ❌ Expired")
+				}
+			}
+		} else {
+			fmt.Println("  Token Validation: ❌ Invalid")
+		}
 
 		return nil
 	},
@@ -274,6 +293,15 @@ func saveAuthToken(serverURL, username, token, caCertPath string, insecure bool)
 	}
 
 	configFile := filepath.Join(configDir, "config.yaml")
+
+	// Convert caCertPath to absolute path if provided
+	if caCertPath != "" {
+		absCertPath, err := filepath.Abs(caCertPath)
+		if err != nil {
+			return fmt.Errorf("failed to convert CA cert path to absolute: %w", err)
+		}
+		caCertPath = absCertPath
+	}
 
 	viper.Set("auth.server", serverURL)
 	viper.Set("auth.token", token)
@@ -416,4 +444,81 @@ func saveCredentialsToFile(username, password string) error {
 	}
 
 	return nil
+}
+
+// validateTokenAgainstServer validates the token against the server and returns expiration time
+func validateTokenAgainstServer(serverURL, token, caCertPath string, insecure bool) (bool, time.Time, error) {
+	// First, try to extract expiration from JWT claims without verification
+	expiresAt, err := extractTokenExpiration(token)
+	if err != nil {
+		return false, time.Time{}, fmt.Errorf("failed to parse token: %w", err)
+	}
+
+	// Create HTTP request to validate token against server
+	validateURL := serverURL + "/api/v1/authpf/activate"
+	req, err := http.NewRequest("GET", validateURL, nil)
+	if err != nil {
+		return false, expiresAt, fmt.Errorf("failed to create validation request: %w", err)
+	}
+
+	// Set authorization header with Bearer token
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Create HTTP client with optional CA certificate or insecure mode
+	client := &http.Client{}
+	if insecure {
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	} else if caCertPath != "" {
+		tlsConfig, err := createTLSConfig(caCertPath)
+		if err != nil {
+			return false, expiresAt, fmt.Errorf("failed to configure TLS: %w", err)
+		}
+		client.Transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+	}
+
+	// Send request
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, expiresAt, fmt.Errorf("failed to send validation request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check HTTP status
+	if resp.StatusCode == http.StatusOK {
+		return true, expiresAt, nil
+	} else if resp.StatusCode == http.StatusUnauthorized {
+		return false, expiresAt, nil
+	}
+
+	// Read response body for error details
+	body, _ := io.ReadAll(resp.Body)
+	return false, expiresAt, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+}
+
+// extractTokenExpiration extracts the expiration time from a JWT token without verification
+func extractTokenExpiration(tokenString string) (time.Time, error) {
+	// Parse token without verification (we only need the claims)
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &jwt.RegisteredClaims{})
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse token: %w", err)
+	}
+
+	// Extract claims
+	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	if !ok {
+		return time.Time{}, fmt.Errorf("invalid token claims")
+	}
+
+	// Return expiration time
+	if claims.ExpiresAt != nil {
+		return claims.ExpiresAt.Time, nil
+	}
+
+	return time.Time{}, nil
 }

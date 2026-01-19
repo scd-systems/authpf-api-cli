@@ -18,12 +18,6 @@ var configCheckCmd = &cobra.Command{
 	Long:  "Check the current configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config-path")
-		serverURL, _ := cmd.Flags().GetString("server")
-
-		if serverURL != "" {
-			// Client mode: get config from server
-			return checkConfigRemote(serverURL)
-		}
 
 		// Server mode: check local config
 		if configPath == "" {
@@ -47,12 +41,6 @@ var configValidateCmd = &cobra.Command{
 	Long:  "Validate the configuration for correctness and completeness",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config-path")
-		serverURL, _ := cmd.Flags().GetString("server")
-
-		if serverURL != "" {
-			// Client mode: validate config on server
-			return validateConfigRemote(serverURL)
-		}
 
 		// Server mode: validate local config
 		if configPath == "" {
@@ -77,30 +65,69 @@ var configShowCmd = &cobra.Command{
 	Long:  "Display the current configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config-path")
-		serverURL, _ := cmd.Flags().GetString("server")
-
-		if serverURL != "" {
-			// Client mode: get config from server
-			return showConfigRemote(serverURL)
-		}
 
 		// Server mode: show local config
 		if configPath == "" {
 			configPath = "/usr/local/etc/authpf-api.conf"
 		}
 
+		// Load and parse the config file
+		config, err := loadConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
 		fmt.Printf("Configuration from: %s\n\n", configPath)
-		fmt.Println("Server:")
-		fmt.Println("  Bind: 0.0.0.0")
-		fmt.Println("  Port: 8080")
-		fmt.Println("  SSL: disabled")
-		fmt.Println("\nAuthPF:")
-		fmt.Println("  Anchor: authpf")
-		fmt.Println("  Table: authpf_users")
-		fmt.Println("  User ID: 1000")
-		fmt.Println("\nRBAC:")
-		fmt.Println("  Roles configured: admin, user")
-		fmt.Println("  Users configured: 2")
+
+		fmt.Printf("=== Defaults ===\n")
+
+		fmt.Printf("Filepath pfctl: \t%s\n", config.Defaults.PfctlBinary)
+
+		fmt.Printf("\n=== AuthPF ===\n")
+
+		fmt.Printf("Rule Timeout: \t\t%s\n", config.AuthPF.Timeout)
+		fmt.Printf("Root Folder: \t\t%s\n", config.AuthPF.UserRulesRootFolder)
+		fmt.Printf("Rule Filename: \t\t%s\n", config.AuthPF.UserRulesFile)
+		fmt.Printf("Anchor Base: \t\t%s\n", config.AuthPF.AnchorName)
+
+		if len(config.AuthPF.FlushFilter) > 0 {
+			fmt.Printf("PF Flush Filter: \n")
+			for _, filter := range config.AuthPF.FlushFilter {
+				fmt.Printf("  - %s\n", filter)
+			}
+		} else {
+			fmt.Println("PF Flush Filter: not Set")
+		}
+
+		// Display the parsed configuration
+		fmt.Printf("\n=== RBAC ===\n")
+		if len(config.Rbac.Roles) > 0 {
+			for roleName, role := range config.Rbac.Roles {
+				fmt.Printf("%s:\n", roleName)
+				if len(role.Permissions) > 0 {
+					for _, perm := range role.Permissions {
+						fmt.Printf("  - %s\n", perm)
+					}
+				} else {
+					fmt.Println("(none)")
+				}
+			}
+		} else {
+			fmt.Println("\nRoles: (none configured)")
+		}
+		fmt.Println("\n=== Users ===")
+
+		if len(config.Rbac.Users) > 0 {
+			for username, user := range config.Rbac.Users {
+				fmt.Printf("\n%s:\n", username)
+				fmt.Printf("  Role: \t%s\n", user.Role)
+				fmt.Printf("  User ID: \t%d\n", user.UserID)
+				if len(user.Password) > 0 {
+					fmt.Printf("  Password: \tis Set\n")
+				}
+			}
+		} else {
+			fmt.Println("\nUsers: (none configured)")
+		}
 
 		return nil
 	},
@@ -122,23 +149,4 @@ func init() {
 	configCmd.AddCommand(configCheckCmd)
 	configCmd.AddCommand(configValidateCmd)
 	configCmd.AddCommand(configShowCmd)
-}
-
-// Remote operations (client mode)
-func checkConfigRemote(serverURL string) error {
-	fmt.Printf("Checking configuration on server: %s\n", serverURL)
-	fmt.Println("(Remote config check not yet implemented)")
-	return nil
-}
-
-func validateConfigRemote(serverURL string) error {
-	fmt.Printf("Validating configuration on server: %s\n", serverURL)
-	fmt.Println("(Remote config validation not yet implemented)")
-	return nil
-}
-
-func showConfigRemote(serverURL string) error {
-	fmt.Printf("Getting configuration from server: %s\n", serverURL)
-	fmt.Println("(Remote config retrieval not yet implemented)")
-	return nil
 }
