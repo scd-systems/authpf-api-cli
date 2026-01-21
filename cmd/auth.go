@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -39,16 +40,46 @@ var authLoginCmd = &cobra.Command{
 
 		// Try to load credentials from environment variables first
 		if serverURL == "" {
-			serverURL = os.Getenv("AUTHPF_API_SERVER")
+			envParam := os.Getenv("AUTHPF_API_SERVER")
+			if envParam == "" {
+				serverURL = viper.GetString("auth.server")
+			} else {
+				serverURL = envParam
+			}
 		}
 		if username == "" {
-			username = os.Getenv("AUTHPF_API_USERNAME")
+			envParam := os.Getenv("AUTHPF_API_USERNAME")
+			if envParam == "" {
+				username = viper.GetString("auth.username")
+			} else {
+				username = envParam
+			}
 		}
 		if password == "" {
-			password = os.Getenv("AUTHPF_API_PASSWORD")
+			envParam := os.Getenv("AUTHPF_API_PASSWORD")
+			if envParam == "" {
+				password = viper.GetString("auth.username")
+			} else {
+				password = envParam
+			}
 		}
 		if caCertPath == "" {
-			caCertPath = os.Getenv("AUTHPF_API_CACERT")
+			envParam := os.Getenv("AUTHPF_API_CACERT")
+			if envParam == "" {
+				caCertPath = viper.GetString("auth.username")
+			} else {
+				caCertPath = envParam
+			}
+		}
+		if insecure == false {
+			envParam := os.Getenv("AUTHPF_API_INSECURE")
+			if envParam == "" {
+				insecure = viper.GetBool("auth.insecure")
+			} else {
+				if strings.ToLower(envParam) == "true" {
+					insecure = true
+				}
+			}
 		}
 
 		// hash password if set
