@@ -23,22 +23,22 @@ type AuthPFStatus struct {
 	ExpiresAt time.Time `json:"expire_at"`
 }
 
-// AuthPFRulesResponse represents the API response with rules and server time
-type AuthPFRulesResponse struct {
-	Rules      map[string]*AuthPFStatus `json:"rules"`
-	ServerTime time.Time                `json:"server_time"`
+// AuthPFAnchorsResponse represents the API response with anchor and server time
+type AuthPFAnchorsResponse struct {
+	Anchors    map[string]*AuthPFStatus
+	ServerTime time.Time
 }
 
 var authpfCmd = &cobra.Command{
 	Use:   "authpf",
-	Short: "Manage authpf rules [client only]",
-	Long:  "Activate, deactivate, and check status of authpf rules",
+	Short: "Manage authpf anchors [client only]",
+	Long:  "Activate, deactivate, and check status of authpf anchors",
 }
 
 var authpfActivateCmd = &cobra.Command{
 	Use:           "activate",
-	Short:         "Activate authpf rule",
-	Long:          "Activate an authpf rule for a user",
+	Short:         "Activate authpf anchor",
+	Long:          "Activate an authpf anchor for a user",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,20 +61,20 @@ var authpfActivateCmd = &cobra.Command{
 		}
 
 		// Call activate endpoint
-		if err := activateAuthPFRule(serverURL, token, authpfUsername, timeout); err != nil {
+		if err := activateAuthPFAnchor(serverURL, token, authpfUsername, timeout); err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
 			return fmt.Errorf("")
 		}
 
-		fmt.Println("✅ AuthPF rule activated successfully")
+		fmt.Println("✅ AuthPF anchor activated successfully")
 		return nil
 	},
 }
 
 var authpfDeactivateCmd = &cobra.Command{
 	Use:           "deactivate",
-	Short:         "Deactivate authpf rule",
-	Long:          "Deactivate an authpf rule for a user",
+	Short:         "Deactivate authpf anchor",
+	Long:          "Deactivate an authpf anchor for a user",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -97,20 +97,20 @@ var authpfDeactivateCmd = &cobra.Command{
 		}
 
 		// Call deactivate endpoint
-		if err := deactivateAuthPFRule(serverURL, token, authpfUsername, all); err != nil {
+		if err := deactivateAuthPFAnchor(serverURL, token, authpfUsername, all); err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
 			return fmt.Errorf("")
 		}
 
-		fmt.Println("✅ AuthPF rule deactivated successfully")
+		fmt.Println("✅ AuthPF anchor deactivated successfully")
 		return nil
 	},
 }
 
 var authpfStatusCmd = &cobra.Command{
 	Use:           "status",
-	Short:         "Check authpf rule status",
-	Long:          "Check the status of an authpf rule",
+	Short:         "Check authpf anchor status",
+	Long:          "Check the status of an authpf anchor",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -133,52 +133,52 @@ var authpfStatusCmd = &cobra.Command{
 		}
 
 		// Call status endpoint
-		statusData, err := getAuthPFRuleStatus(serverURL, token, authpfUsername, all)
+		statusData, err := getAuthPFAnchorStatus(serverURL, token, authpfUsername, all)
 		if err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
 			return fmt.Errorf("")
 		}
 
-		// Check if status is nil (no active rule)
+		// Check if status is nil (no active anchor)
 		if statusData == nil {
-			fmt.Println("❌ AuthPF rule status: inactive")
-			fmt.Println("  No active rule found")
+			fmt.Println("❌ AuthPF anchor status: inactive")
+			fmt.Println("  No active anchor found")
 			return nil
 		}
 
-		// Parse response as AuthPFRulesResponse
-		apiResponse, ok := statusData.(*AuthPFRulesResponse)
+		// Parse response as AuthPFAnchorsResponse
+		apiResponse, ok := statusData.(*AuthPFAnchorsResponse)
 		if !ok {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: invalid response format\n")
 			return fmt.Errorf("")
 		}
 
-		// Check if rules map is empty
-		if len(apiResponse.Rules) == 0 {
-			fmt.Println("❌ AuthPF rule status: inactive")
-			fmt.Println("  No active rule found")
+		// Check if anchors map is empty
+		if len(apiResponse.Anchors) == 0 {
+			fmt.Println("❌ AuthPF anchor status: inactive")
+			fmt.Println("  No active anchor found")
 			return nil
 		}
 
-		// If --all flag is set, display all rules
+		// If --all flag is set, display all anchors
 		if all {
-			fmt.Println("✅ AuthPF rules status: active")
-			fmt.Printf("  Total active rules: %d\n\n", len(apiResponse.Rules))
-			for ruleKey, status := range apiResponse.Rules {
-				fmt.Printf("  Rule: %s\n", ruleKey)
+			fmt.Println("✅ AuthPF anchor status: active")
+			fmt.Printf("  Total active anchors: %d\n\n", len(apiResponse.Anchors))
+			for key, status := range apiResponse.Anchors {
+				fmt.Printf("  Anchor: %s\n", key)
 				fmt.Println(formatAuthPFStatusDetailed(status, apiResponse.ServerTime))
 			}
 		} else {
-			// Get the first (and usually only) rule for the user
+			// Get the first (and usually only) anchor for the user
 			var status *AuthPFStatus
-			for _, rule := range apiResponse.Rules {
-				status = rule
+			for _, anchor := range apiResponse.Anchors {
+				status = anchor
 				break
 			}
 
 			if status == nil {
-				fmt.Println("❌ AuthPF rule status: inactive")
-				fmt.Println("  No active rule found")
+				fmt.Println("❌ AuthPF status: inactive")
+				fmt.Println("  No active anchors found")
 				return nil
 			}
 
@@ -195,11 +195,11 @@ func init() {
 
 	// Deactivate command
 	authpfDeactivateCmd.Flags().StringP("username", "u", "", "Username (optional, defaults to authenticated user)")
-	authpfDeactivateCmd.Flags().BoolP("all", "a", false, "Deactivate all rules")
+	authpfDeactivateCmd.Flags().BoolP("all", "a", false, "Deactivate all anchors")
 
 	// Status command
 	authpfStatusCmd.Flags().StringP("username", "u", "", "Username (optional, defaults to authenticated user)")
-	authpfStatusCmd.Flags().BoolP("all", "a", false, "Get status for all rules")
+	authpfStatusCmd.Flags().BoolP("all", "a", false, "Get status for all anchors")
 
 	authpfCmd.AddCommand(authpfActivateCmd)
 	authpfCmd.AddCommand(authpfDeactivateCmd)
@@ -233,8 +233,8 @@ func getHTTPClientWithTLS() (*http.Client, error) {
 	return client, nil
 }
 
-// activateAuthPFRule sends a POST request to activate an authpf rule
-func activateAuthPFRule(serverURL, token, username, timeout string) error {
+// activateAuthPFAnchor sends a POST request to activate an authpf anchor
+func activateAuthPFAnchor(serverURL, token, username, timeout string) error {
 	// Build query parameters
 	params := url.Values{}
 	if username != "" {
@@ -285,8 +285,8 @@ func activateAuthPFRule(serverURL, token, username, timeout string) error {
 	return nil
 }
 
-// deactivateAuthPFRule sends a DELETE request to deactivate an authpf rule
-func deactivateAuthPFRule(serverURL, token, username string, all bool) error {
+// deactivateAuthPFAnchor sends a DELETE request to deactivate an authpf anchor
+func deactivateAuthPFAnchor(serverURL, token, username string, all bool) error {
 	// Determine endpoint
 	endpoint := serverURL + "/api/v1/authpf/activate"
 	if all {
@@ -338,8 +338,8 @@ func deactivateAuthPFRule(serverURL, token, username string, all bool) error {
 	return nil
 }
 
-// getAuthPFRuleStatus sends a GET request to check authpf rule status
-func getAuthPFRuleStatus(serverURL, token, username string, all bool) (interface{}, error) {
+// getAuthPFAnchorStatus sends a GET request to check AuthPF anchor status
+func getAuthPFAnchorStatus(serverURL, token, username string, all bool) (interface{}, error) {
 	// Build query parameters
 	params := url.Values{}
 	if username != "" {
@@ -387,8 +387,8 @@ func getAuthPFRuleStatus(serverURL, token, username string, all bool) (interface
 		return nil, fmt.Errorf("status check failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response into AuthPFRulesResponse
-	var apiResponse AuthPFRulesResponse
+	// Parse response into AuthPFAnchorsResponse
+	var apiResponse AuthPFAnchorsResponse
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -400,7 +400,7 @@ func getAuthPFRuleStatus(serverURL, token, username string, all bool) (interface
 // formatAuthPFStatus formats the status for display
 func formatAuthPFStatus(status *AuthPFStatus, serverTime time.Time) string {
 	// Format the output
-	output := "✅ AuthPF rule status: active\n"
+	output := "✅ AuthPF anchor status: active\n"
 	output += fmt.Sprintf("  Username: %s\n", status.Username)
 	output += fmt.Sprintf("  UserIP: %s\n", status.UserIP)
 	output += fmt.Sprintf("  UserID: %d\n", status.UserID)
@@ -411,8 +411,8 @@ func formatAuthPFStatus(status *AuthPFStatus, serverTime time.Time) string {
 		// Use server time for accurate calculation
 		timeRemaining := status.ExpiresAt.Sub(serverTime)
 
-		output += fmt.Sprintf("  Rules Expire At: %s\n", status.ExpiresAt.Format("2006-01-02 03:04 PM"))
-		output += fmt.Sprintf("  Rules Expire In: %s", formatDuration(timeRemaining))
+		output += fmt.Sprintf("  Expire At: %s\n", status.ExpiresAt.Format("2006-01-02 03:04 PM"))
+		output += fmt.Sprintf("  Expire In: %s", formatDuration(timeRemaining))
 	}
 
 	return output
@@ -431,8 +431,8 @@ func formatAuthPFStatusDetailed(status *AuthPFStatus, serverTime time.Time) stri
 		// Use server time for accurate calculation
 		timeRemaining := status.ExpiresAt.Sub(serverTime)
 
-		output += fmt.Sprintf("    Rules Expire At: %s\n", status.ExpiresAt.Format("2006-01-02 03:04 PM"))
-		output += fmt.Sprintf("    Rules Expire In: %s\n", formatDuration(timeRemaining))
+		output += fmt.Sprintf("    Expire At: %s\n", status.ExpiresAt.Format("2006-01-02 03:04 PM"))
+		output += fmt.Sprintf("    Expire In: %s\n", formatDuration(timeRemaining))
 	}
 
 	return output

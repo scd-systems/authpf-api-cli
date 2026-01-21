@@ -16,10 +16,10 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "authpf-api-cli",
-	Short: "authpf-api CLI tool for user and rule management",
+	Short: "authpf-api CLI tool for user and pf anchor management",
 	Long: `authpf-api-cli is a command-line tool for managing authpf-api.
-It can be used both on the server (for user and rule management)
-and on the client (for authentication and rule loading).`,
+It can be used both on the server (for user and pf anchor management)
+and on the client (for authentication and anchor loading).`,
 	Version: version,
 }
 

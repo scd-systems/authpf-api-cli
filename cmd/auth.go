@@ -74,24 +74,24 @@ var authLoginCmd = &cobra.Command{
 		}
 
 		if serverURL == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: server URL is required\n")
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: server URL is required\n")
 			return fmt.Errorf("")
 		}
 
 		if username == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: username is required\n")
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: username is required\n")
 			return fmt.Errorf("")
 		}
 
 		if password == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: password is required\n")
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: password is required\n")
 			return fmt.Errorf("")
 		}
 
 		// Perform login
 		token, err := performLogin(serverURL, username, password, caCertPath, insecure)
 		if err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: %v\n", err)
 			return fmt.Errorf("")
 		}
 
@@ -99,7 +99,7 @@ var authLoginCmd = &cobra.Command{
 
 		// Save token and auth settings to config file automatically
 		if err := saveAuthToken(serverURL, username, token, caCertPath, insecure); err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: failed to save token: %v\n", err)
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: failed to save token: %v\n", err)
 			return fmt.Errorf("")
 		}
 		fmt.Println("✅ Token saved to config file")
@@ -107,7 +107,7 @@ var authLoginCmd = &cobra.Command{
 		// Save credentials to credentials file if provided via flags
 		if username != "" && password != "" {
 			if err := saveCredentialsToFile(username, password); err != nil {
-				fmt.Fprintf(cmd.OutOrStderr(), "Warning: failed to save credentials file: %v\n", err)
+				fmt.Fprintf(cmd.OutOrStderr(), "⚠️ Warning: failed to save credentials file: %v\n", err)
 				// Don't fail the login if credentials file save fails
 			} else {
 				fmt.Println("✅ Credentials saved to credentials file")

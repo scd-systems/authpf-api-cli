@@ -6,8 +6,8 @@ A command-line tool for managing the authpf-api server and client operations.
 
 - **User Management**: Create, modify, and delete users with password hashing
 - **Configuration Management**: Check and validate server configuration
-- **Rule Management**: Activate, deactivate pf user rules
-- **Status Monitoring**: Check server and client status, view active sessions and loaded rules
+- **Rule Management**: Activate, deactivate pf user anchors
+- **Status Monitoring**: Check server and client status, view active sessions and loaded anchors
 - **Authentication**: Login/logout and manage JWT tokens
 
 ## Installation
@@ -73,14 +73,17 @@ authpf-api-cli auth logout
 #### Authpf API Operations
 
 ```bash
-# Activate a rule on remote server
+# Activate a anchor on remote server
 authpf-api-cli authpf activate
 
-# Activate a rule on remote server with specific timeout for 1h
+# Activate a anchor on remote server with specific timeout for 1h
 authpf-api-cli authpf activate -t 1h
 
-# Deactivate a rule on remote server
+# Deactivate a anchor on remote server
 authpf-api-cli authpf deactivate
+
+# Deactivate all anchors on remote server
+authpf-api-cli authpf deactivate --all
 
 # Check client connection status
 authpf-api-cli authpf status
@@ -116,13 +119,13 @@ authpf-api-cli auth login --server https://api.example.com --username alice --pa
 # 2. Check authentication
 authpf-api-cli auth status
 
-# 3. Activate your rules
+# 3. Activate your anchors
 authpf-api-cli authpf activate
 
 # 4. Check status
 authpf-api-cli authpf status
 
-# 5. Deactivate rules when done
+# 5. Deactivate anchors when done
 authpf-api-cli authpf deactivate
 
 # 6. Logout

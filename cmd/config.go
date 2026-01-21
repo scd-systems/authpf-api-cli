@@ -84,9 +84,9 @@ var configShowCmd = &cobra.Command{
 
 		fmt.Printf("\n=== AuthPF ===\n")
 
-		fmt.Printf("Rule Timeout: \t\t%s\n", config.AuthPF.Timeout)
+		fmt.Printf("Anchor Timeout: \t\t%s\n", config.AuthPF.Timeout)
 		fmt.Printf("Root Folder: \t\t%s\n", config.AuthPF.UserRulesRootFolder)
-		fmt.Printf("Rule Filename: \t\t%s\n", config.AuthPF.UserRulesFile)
+		fmt.Printf("Rules Filename: \t\t%s\n", config.AuthPF.UserRulesFile)
 		fmt.Printf("Anchor Base: \t\t%s\n", config.AuthPF.AnchorName)
 
 		if len(config.AuthPF.FlushFilter) > 0 {
