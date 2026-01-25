@@ -58,7 +58,7 @@ var authLoginCmd = &cobra.Command{
 		if password == "" {
 			envParam := os.Getenv("AUTHPF_API_PASSWORD")
 			if envParam == "" {
-				password = viper.GetString("auth.username")
+				password = viper.GetString("auth.password")
 			} else {
 				password = envParam
 			}
@@ -66,7 +66,7 @@ var authLoginCmd = &cobra.Command{
 		if caCertPath == "" {
 			envParam := os.Getenv("AUTHPF_API_CACERT")
 			if envParam == "" {
-				caCertPath = viper.GetString("auth.username")
+				caCertPath = viper.GetString("auth.ca_cert")
 			} else {
 				caCertPath = envParam
 			}
@@ -102,6 +102,13 @@ var authLoginCmd = &cobra.Command{
 					password = creds.Password
 				}
 			}
+		}
+
+		if err := validateUsername(username); err != nil {
+			return err
+		}
+		if err := validatePassword(password); err != nil {
+			return err
 		}
 
 		if serverURL == "" {
@@ -214,7 +221,7 @@ var authTokenCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Current Token: %s\n", token)
+		fmt.Printf("Current Token: %s....\n", token[:10])
 		return nil
 	},
 }
@@ -261,7 +268,9 @@ func performLogin(serverURL, username, password, caCertPath string, insecure boo
 	req.Header.Set("Content-Type", "application/json")
 
 	// Create HTTP client with optional CA certificate or insecure mode
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	if insecure {
 		// Skip certificate verification (insecure mode)
 		client.Transport = &http.Transport{
@@ -496,7 +505,9 @@ func validateTokenAgainstServer(serverURL, token, caCertPath string, insecure bo
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Create HTTP client with optional CA certificate or insecure mode
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	if insecure {
 		client.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
@@ -528,7 +539,11 @@ func validateTokenAgainstServer(serverURL, token, caCertPath string, insecure bo
 	}
 
 	// Read response body for error details
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, expiresAt, fmt.Errorf("failed to read response: %w", err)
+	}
+
 	return false, expiresAt, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
 }
 

@@ -12,6 +12,7 @@ var configCmd = &cobra.Command{
 	Long:  "Check and validate configuration",
 }
 
+// TODO: Implementation
 var configCheckCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check configuration",
@@ -35,6 +36,7 @@ var configCheckCmd = &cobra.Command{
 	},
 }
 
+// TODO: Implementation
 var configValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate configuration",
@@ -146,7 +148,7 @@ func init() {
 	configShowCmd.Flags().StringP("config-path", "c", "", "Path to config file")
 	configShowCmd.Flags().StringP("server", "s", "", "Server URL (for client mode)")
 
-	configCmd.AddCommand(configCheckCmd)
-	configCmd.AddCommand(configValidateCmd)
+	// configCmd.AddCommand(configCheckCmd)
+	// configCmd.AddCommand(configValidateCmd)
 	configCmd.AddCommand(configShowCmd)
 }

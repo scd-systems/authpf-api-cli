@@ -211,7 +211,9 @@ func getHTTPClientWithTLS() (*http.Client, error) {
 	caCertPath := viper.GetString("auth.ca_cert")
 	insecure := viper.GetBool("auth.insecure")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 
 	if insecure {
 		// Skip certificate verification (insecure mode)
