@@ -15,6 +15,7 @@ func validateUsername(username string) error {
 	return nil
 }
 
+// TODO: Implement
 func validatePassword(password string) error {
 	if len(password) < 3 || len(password) > 128 {
 		return fmt.Errorf("username must be 3-128 characters")

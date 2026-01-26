@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	cfgFile string
-	verbose bool
-	version string
+	cfgFile     string
+	verbose     bool
+	version     string
+	API_VERSION = "1.1"
 )
 
 var rootCmd = &cobra.Command{
@@ -32,7 +33,8 @@ func Execute(ver string) error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.authpf-api-cli/config.yaml)")
+	default_config_filepath := fmt.Sprintf("config file (default is ~/%s/%s", CONFIG_DIR, CONFIG_FILE)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", default_config_filepath)
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	rootCmd.AddCommand(userCmd)
