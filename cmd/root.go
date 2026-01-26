@@ -8,11 +8,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+const API_VERSION = "1.1"
+
 var (
-	cfgFile     string
-	verbose     bool
-	version     string
-	API_VERSION = "1.1"
+	cfgFile string
+	verbose bool
+	version string
 )
 
 var rootCmd = &cobra.Command{
