@@ -47,7 +47,7 @@ var authpfActivateCmd = &cobra.Command{
 		username := viper.GetString("auth.username")
 
 		if serverURL == "" || token == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: not authenticated. Please login first\n")
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: not authenticated. Please login first\n")
 			return fmt.Errorf("")
 		}
 
@@ -83,7 +83,7 @@ var authpfDeactivateCmd = &cobra.Command{
 		username := viper.GetString("auth.username")
 
 		if serverURL == "" || token == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: not authenticated. Please login first\n")
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: not authenticated. Please login first\n")
 			return fmt.Errorf("")
 		}
 
@@ -98,7 +98,7 @@ var authpfDeactivateCmd = &cobra.Command{
 
 		// Call deactivate endpoint
 		if err := deactivateAuthPFAnchor(serverURL, token, authpfUsername, all); err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: %v\n", err)
 			return fmt.Errorf("")
 		}
 
@@ -119,7 +119,7 @@ var authpfStatusCmd = &cobra.Command{
 		username := viper.GetString("auth.username")
 
 		if serverURL == "" || token == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: not authenticated. Please login first\n")
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: not authenticated. Please login first\n")
 			return fmt.Errorf("")
 		}
 
@@ -135,7 +135,7 @@ var authpfStatusCmd = &cobra.Command{
 		// Call status endpoint
 		statusData, err := getAuthPFAnchorStatus(serverURL, token, authpfUsername, all)
 		if err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: %v\n", err)
 			return fmt.Errorf("")
 		}
 
@@ -149,7 +149,7 @@ var authpfStatusCmd = &cobra.Command{
 		// Parse response as AuthPFAnchorsResponse
 		apiResponse, ok := statusData.(*AuthPFAnchorsResponse)
 		if !ok {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: invalid response format\n")
+			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: invalid response format\n")
 			return fmt.Errorf("")
 		}
 
@@ -237,6 +237,10 @@ func getHTTPClientWithTLS() (*http.Client, error) {
 
 // activateAuthPFAnchor sends a POST request to activate an authpf anchor
 func activateAuthPFAnchor(serverURL, token, username, timeout string) error {
+	// Verify version compatibility before activation
+	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+		return fmt.Errorf("version compatibility check failed: %w", err)
+	}
 	// Build query parameters
 	params := url.Values{}
 	if username != "" {
@@ -247,13 +251,13 @@ func activateAuthPFAnchor(serverURL, token, username, timeout string) error {
 	}
 
 	// Build URL
-	endpoint := serverURL + "/api/v1/authpf/activate"
+	endpoint := serverURL + ENDPOINT_AUTHPF_ACTIVATE
 	if len(params) > 0 {
 		endpoint += "?" + params.Encode()
 	}
 
 	// Create request
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer([]byte("{}")))
+	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_ACTIVATE, endpoint, bytes.NewBuffer([]byte("{}")))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -289,10 +293,14 @@ func activateAuthPFAnchor(serverURL, token, username, timeout string) error {
 
 // deactivateAuthPFAnchor sends a DELETE request to deactivate an authpf anchor
 func deactivateAuthPFAnchor(serverURL, token, username string, all bool) error {
+	// Verify version compatibility before deactivation
+	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+		return fmt.Errorf("version compatibility check failed: %w", err)
+	}
 	// Determine endpoint
-	endpoint := serverURL + "/api/v1/authpf/activate"
+	endpoint := serverURL + ENDPOINT_AUTHPF_DEACTIVATE
 	if all {
-		endpoint = serverURL + "/api/v1/authpf/all"
+		endpoint = serverURL + ENDPOINT_AUTHPF_ALL
 	}
 
 	// Build query parameters
@@ -306,7 +314,7 @@ func deactivateAuthPFAnchor(serverURL, token, username string, all bool) error {
 	}
 
 	// Create request
-	req, err := http.NewRequest("DELETE", endpoint, bytes.NewBuffer([]byte("{}")))
+	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_DEACTIVATE, endpoint, bytes.NewBuffer([]byte("{}")))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -342,6 +350,10 @@ func deactivateAuthPFAnchor(serverURL, token, username string, all bool) error {
 
 // getAuthPFAnchorStatus sends a GET request to check AuthPF anchor status
 func getAuthPFAnchorStatus(serverURL, token, username string, all bool) (interface{}, error) {
+	// Verify version compatibility before status check
+	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+		return nil, fmt.Errorf("version compatibility check failed: %w", err)
+	}
 	// Build query parameters
 	params := url.Values{}
 	if username != "" {
@@ -349,9 +361,9 @@ func getAuthPFAnchorStatus(serverURL, token, username string, all bool) (interfa
 	}
 
 	// Build URL
-	endpoint := serverURL + "/api/v1/authpf/activate"
+	endpoint := serverURL + ENDPOINT_AUTHPF_ACTIVATE
 	if all {
-		endpoint = serverURL + "/api/v1/authpf/all"
+		endpoint = serverURL + ENDPOINT_AUTHPF_ALL
 	}
 
 	if len(params) > 0 {
@@ -359,7 +371,7 @@ func getAuthPFAnchorStatus(serverURL, token, username string, all bool) (interfa
 	}
 
 	// Create request
-	req, err := http.NewRequest("GET", endpoint, nil)
+	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_VIEW, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

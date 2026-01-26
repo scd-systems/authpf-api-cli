@@ -243,6 +243,10 @@ func init() {
 // performLogin authenticates against the server and returns a JWT token
 func performLogin(serverURL, username, password, caCertPath string, insecure bool) (string, error) {
 
+	// Verify version compatibility before attempting login
+	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+		return "", fmt.Errorf("version compatibility check failed: %w", err)
+	}
 	fmt.Printf("Authenticating against %s...\n", serverURL)
 
 	// Create login request payload
@@ -259,7 +263,7 @@ func performLogin(serverURL, username, password, caCertPath string, insecure boo
 
 	// Create HTTP request
 	loginURL := serverURL + "/login"
-	req, err := http.NewRequest("POST", loginURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest(METHOD_ENDPOINT_LOGIN, loginURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -327,12 +331,12 @@ func saveAuthToken(serverURL, username, token, caCertPath string, insecure bool)
 		return err
 	}
 
-	configDir := filepath.Join(home, ".authpf-api-cli")
+	configDir := filepath.Join(home, CONFIG_DIR)
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return err
 	}
 
-	configFile := filepath.Join(configDir, "config.yaml")
+	configFile := filepath.Join(configDir, CONFIG_FILE)
 
 	// Convert caCertPath to absolute path if provided
 	if caCertPath != "" {
@@ -362,8 +366,8 @@ func clearAuthToken() error {
 		return err
 	}
 
-	configDir := filepath.Join(home, ".authpf-api-cli")
-	configFile := filepath.Join(configDir, "config.yaml")
+	configDir := filepath.Join(home, CONFIG_DIR)
+	configFile := filepath.Join(configDir, CONFIG_FILE)
 
 	viper.Set("auth.token", "")
 	viper.Set("auth.username", "")
@@ -391,8 +395,8 @@ func loadCredentialsFromFile() (*Credentials, error) {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	configDir := filepath.Join(home, ".authpf-api-cli")
-	credentialsFile := filepath.Join(configDir, "credentials.yaml")
+	configDir := filepath.Join(home, CONFIG_DIR)
+	credentialsFile := filepath.Join(configDir, CONFIG_FILE)
 
 	// Check if file exists
 	if _, err := os.Stat(credentialsFile); os.IsNotExist(err) {
@@ -459,12 +463,12 @@ func saveCredentialsToFile(username, password string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	configDir := filepath.Join(home, ".authpf-api-cli")
+	configDir := filepath.Join(home, CONFIG_DIR)
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	credentialsFile := filepath.Join(configDir, "credentials.yaml")
+	credentialsFile := filepath.Join(configDir, CREDENTIALS_FILE)
 
 	// Create credentials structure
 	creds := Credentials{
@@ -495,8 +499,8 @@ func validateTokenAgainstServer(serverURL, token, caCertPath string, insecure bo
 	}
 
 	// Create HTTP request to validate token against server
-	validateURL := serverURL + "/api/v1/authpf/activate"
-	req, err := http.NewRequest("GET", validateURL, nil)
+	validateURL := serverURL + ENDPOINT_AUTHPF_ACTIVATE
+	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_VIEW, validateURL, nil)
 	if err != nil {
 		return false, expiresAt, fmt.Errorf("failed to create validation request: %w", err)
 	}
