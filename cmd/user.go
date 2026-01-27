@@ -318,7 +318,7 @@ func saveConfig(configPath string, config *ConfigFile) error {
 	}
 
 	// Write to file
-	err = os.WriteFile(configPath, yamlData, 0644)
+	err = os.WriteFile(configPath, yamlData, 0640)
 	if err != nil {
 		return err
 	}

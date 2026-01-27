@@ -112,41 +112,36 @@ var authLoginCmd = &cobra.Command{
 		}
 
 		if serverURL == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: server URL is required\n")
-			return fmt.Errorf("")
+			return fmt.Errorf("server URL is required")
 		}
 
 		if username == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: username is required\n")
-			return fmt.Errorf("")
+			return fmt.Errorf("username is required")
 		}
 
 		if password == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: password is required\n")
-			return fmt.Errorf("")
+			return fmt.Errorf("password is required")
 		}
 
 		// Perform login
 		token, err := performLogin(serverURL, username, password, caCertPath, insecure)
 		if err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: %v\n", err)
-			return fmt.Errorf("")
+			return fmt.Errorf("%v", err)
 		}
 
 		fmt.Printf("✅ Successfully logged in as %s\n", username)
 
 		// Save token and auth settings to config file automatically
 		if err := saveAuthToken(serverURL, username, token, caCertPath, insecure); err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: failed to save token: %v\n", err)
-			return fmt.Errorf("")
+			return fmt.Errorf("failed to save token: %v", err)
 		}
 		fmt.Println("✅ Token saved to config file")
 
 		// Save credentials to credentials file if provided via flags
 		if username != "" && password != "" {
 			if err := saveCredentialsToFile(username, password); err != nil {
-				fmt.Fprintf(cmd.OutOrStderr(), "⚠️ Warning: failed to save credentials file: %v\n", err)
 				// Don't fail the login if credentials file save fails
+				fmt.Fprintf(cmd.OutOrStderr(), "⚠️ Warning: failed to save credentials file: %v\n", err)
 			} else {
 				fmt.Println("✅ Credentials saved to credentials file")
 			}
@@ -396,7 +391,7 @@ func loadCredentialsFromFile() (*Credentials, error) {
 	}
 
 	configDir := filepath.Join(home, CONFIG_DIR)
-	credentialsFile := filepath.Join(configDir, CONFIG_FILE)
+	credentialsFile := filepath.Join(configDir, CREDENTIALS_FILE)
 
 	// Check if file exists
 	if _, err := os.Stat(credentialsFile); os.IsNotExist(err) {

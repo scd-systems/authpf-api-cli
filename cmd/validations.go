@@ -18,10 +18,10 @@ func validateUsername(username string) error {
 // TODO: Implement
 func validatePassword(password string) error {
 	if len(password) < 3 || len(password) > 128 {
-		return fmt.Errorf("username must be 3-128 characters")
+		return fmt.Errorf("password must be 3-128 characters")
 	}
 	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(password) {
-		return fmt.Errorf("username contains invalid characters")
+		return fmt.Errorf("password contains invalid characters")
 	}
 	return nil
 }

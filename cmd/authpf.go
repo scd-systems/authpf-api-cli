@@ -47,8 +47,7 @@ var authpfActivateCmd = &cobra.Command{
 		username := viper.GetString("auth.username")
 
 		if serverURL == "" || token == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: not authenticated. Please login first\n")
-			return fmt.Errorf("")
+			return fmt.Errorf("not authenticated. Please login first")
 		}
 
 		// Get optional parameters
@@ -62,8 +61,7 @@ var authpfActivateCmd = &cobra.Command{
 
 		// Call activate endpoint
 		if err := activateAuthPFAnchor(serverURL, token, authpfUsername, timeout); err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
-			return fmt.Errorf("")
+			return fmt.Errorf("%v", err)
 		}
 
 		fmt.Println("✅ AuthPF anchor activated successfully")
@@ -83,8 +81,7 @@ var authpfDeactivateCmd = &cobra.Command{
 		username := viper.GetString("auth.username")
 
 		if serverURL == "" || token == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: not authenticated. Please login first\n")
-			return fmt.Errorf("")
+			return fmt.Errorf("not authenticated. Please login first")
 		}
 
 		// Get optional parameters
@@ -98,8 +95,7 @@ var authpfDeactivateCmd = &cobra.Command{
 
 		// Call deactivate endpoint
 		if err := deactivateAuthPFAnchor(serverURL, token, authpfUsername, all); err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: %v\n", err)
-			return fmt.Errorf("")
+			return fmt.Errorf("%v", err)
 		}
 
 		fmt.Println("✅ AuthPF anchor deactivated successfully")
@@ -119,8 +115,7 @@ var authpfStatusCmd = &cobra.Command{
 		username := viper.GetString("auth.username")
 
 		if serverURL == "" || token == "" {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: not authenticated. Please login first\n")
-			return fmt.Errorf("")
+			return fmt.Errorf("not authenticated. Please login first")
 		}
 
 		// Get optional parameters
@@ -135,8 +130,7 @@ var authpfStatusCmd = &cobra.Command{
 		// Call status endpoint
 		statusData, err := getAuthPFAnchorStatus(serverURL, token, authpfUsername, all)
 		if err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: %v\n", err)
-			return fmt.Errorf("")
+			return fmt.Errorf("%v", err)
 		}
 
 		// Check if status is nil (no active anchor)
@@ -149,8 +143,7 @@ var authpfStatusCmd = &cobra.Command{
 		// Parse response as AuthPFAnchorsResponse
 		apiResponse, ok := statusData.(*AuthPFAnchorsResponse)
 		if !ok {
-			fmt.Fprintf(cmd.OutOrStderr(), "❌ Error: invalid response format\n")
-			return fmt.Errorf("")
+			return fmt.Errorf("invalid response format")
 		}
 
 		// Check if anchors map is empty
