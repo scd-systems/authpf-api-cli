@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -206,36 +205,14 @@ func activateAuthPFAnchor() error {
 		endpoint += "?" + params.Encode()
 	}
 
-	// Create request
-	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_ACTIVATE, endpoint, bytes.NewBuffer([]byte("{}")))
+	responseBody, responseStatusCode, err := sendRequest(endpoint, METHOD_ENDPOINT_AUTHPF_ACTIVATE)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
-
-	// Send request
-	client, err := NewHTTPClientWithDefaults()
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP client: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return err
 	}
 
 	// Check status
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("activate failed with status %d: %s", resp.StatusCode, string(body))
+	if responseStatusCode != http.StatusCreated && responseStatusCode != http.StatusOK {
+		return fmt.Errorf("activate failed with status %d: %s", responseStatusCode, string(responseBody))
 	}
 
 	return nil
@@ -263,36 +240,14 @@ func deactivateAuthPFAnchor(all bool) error {
 		endpoint += "?" + params.Encode()
 	}
 
-	// Create request
-	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_DEACTIVATE, endpoint, bytes.NewBuffer([]byte("{}")))
+	responseBody, responseStatusCode, err := sendRequest(endpoint, METHOD_ENDPOINT_AUTHPF_DEACTIVATE)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
-
-	// Send request
-	client, err := NewHTTPClientWithDefaults()
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP client: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return err
 	}
 
 	// Check status
-	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("deactivate failed with status %d: %s", resp.StatusCode, string(body))
+	if (responseStatusCode != http.StatusAccepted) && (responseStatusCode != http.StatusOK) {
+		return fmt.Errorf("deactivate failed with status %d: %s", responseStatusCode, string(responseBody))
 	}
 
 	return nil
@@ -300,6 +255,8 @@ func deactivateAuthPFAnchor(all bool) error {
 
 // getAuthPFAnchorStatus sends a GET request to check AuthPF anchor status
 func getAuthPFAnchorStatus(all bool) (interface{}, error) {
+	var apiResponse AuthPFAnchorsResponse
+
 	// Verify version compatibility before status check
 	if err := checkAPIVersionCompatibility(); err != nil {
 		return nil, fmt.Errorf("version compatibility check failed: %w", err)
@@ -320,45 +277,49 @@ func getAuthPFAnchorStatus(all bool) (interface{}, error) {
 		endpoint += "?" + params.Encode()
 	}
 
-	// Create request
-	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_VIEW, endpoint, nil)
+	responseBody, _, err := sendRequest(endpoint, METHOD_ENDPOINT_AUTHPF_VIEW)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return &apiResponse, err
+	}
+
+	// Parse response into AuthPFAnchorsResponse
+	if err := json.Unmarshal(responseBody, &apiResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Return the response with server time for client-side calculations
+	return &apiResponse, nil
+}
+
+func sendRequest(url string, method string) ([]byte, int, error) {
+	// Create request
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 
 	// Send request
 	client, err := NewHTTPClientWithDefaults()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Check status
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status check failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response into AuthPFAnchorsResponse
-	var apiResponse AuthPFAnchorsResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	// Return the response with server time for client-side calculations
-	return &apiResponse, nil
+	return body, resp.StatusCode, nil
 }
 
 // formatAuthPFStatus formats the status for display
