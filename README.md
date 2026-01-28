@@ -60,8 +60,8 @@ authpf-api-cli config show
 # Login to server
 authpf-api-cli auth login --server https://api.example.com --username john --password mypassword
 
-# Save token for future use
-authpf-api-cli auth login --server https://api.example.com --username john --password mypassword --save
+# Login to server use own CA
+authpf-api-cli auth login --server https://api.example.com --username john --password mypassword -c ca-root.crt
 
 # Check authentication status
 authpf-api-cli auth status
@@ -73,13 +73,16 @@ authpf-api-cli auth logout
 #### Authpf API Operations
 
 ```bash
-# Activate a anchor on remote server
+# Activate an anchor on remote server
 authpf-api-cli authpf activate
 
-# Activate a anchor on remote server with specific timeout for 1h
+# Activate an anchor on remote server with specific timeout for 1h
 authpf-api-cli authpf activate -t 1h
 
-# Deactivate a anchor on remote server
+# Activate an other anchor on remote server
+authpf-api-cli authpf activate -u user2
+
+# Deactivate aa anchor on remote server
 authpf-api-cli authpf deactivate
 
 # Deactivate all anchors on remote server
@@ -87,6 +90,9 @@ authpf-api-cli authpf deactivate --all
 
 # Check client connection status
 authpf-api-cli authpf status
+
+# Check all client connection status
+authpf-api-cli authpf status --all
 ```
 
 ## Configuration
@@ -114,7 +120,7 @@ server:
 
 ```bash
 # 1. Login
-authpf-api-cli auth login --server https://api.example.com --username alice --password pass123 --save
+authpf-api-cli auth login --server https://api.example.com --username alice --password pass123
 
 # 2. Check authentication
 authpf-api-cli auth status
