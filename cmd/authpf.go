@@ -23,8 +23,8 @@ type AuthPFStatus struct {
 
 // AuthPFAnchorsResponse represents the API response with anchor and server time
 type AuthPFAnchorsResponse struct {
-	Anchors    map[string]*AuthPFStatus
-	ServerTime time.Time
+	Anchors    map[string]*AuthPFStatus `json:"anchors"`
+	ServerTime time.Time                `json:"server_time"`
 }
 
 var authpfCmd = &cobra.Command{
@@ -370,7 +370,8 @@ func formatDuration(d time.Duration) string {
 	}
 
 	hours := int(d.Hours())
-	minutes := int(d.Minutes()) % 60
+	remainder := d - time.Duration(hours)*time.Hour
+	minutes := int(remainder.Minutes())
 
 	if hours > 0 {
 		return fmt.Sprintf("%dh %dm", hours, minutes)
