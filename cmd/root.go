@@ -3,12 +3,24 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 const API_VERSION = "1.1"
+
+const (
+	VIPER_PARAM_USERNAME        = "api.username"
+	VIPER_PARAM_PASSWORD        = "api.password"
+	VIPER_PARAM_SERVER          = "api.server"
+	VIPER_PARAM_CACERT          = "api.cacert"
+	VIPER_PARAM_INSECURE        = "api.insecure"
+	VIPER_PARAM_AUTHPF_TOKEN    = "api.token"
+	VIPER_PARAM_AUTHPF_USERNAME = "api.authpf.username"
+	VIPER_PARAM_AUTHPF_TIMEOUT  = "api.authpf.timeout"
+)
 
 var (
 	cfgFile string
@@ -58,7 +70,8 @@ func initConfig() {
 		viper.SetConfigName(".authpf-api-cli/config")
 		viper.SetConfigType("yaml")
 	}
-
+	viper.SetEnvPrefix("AUTHPF")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil && verbose {

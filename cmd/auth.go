@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -32,114 +31,66 @@ var authLoginCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		serverURL, _ := cmd.Flags().GetString("server")
-		username, _ := cmd.Flags().GetString("username")
-		password, _ := cmd.Flags().GetString("password")
-		caCertPath, _ := cmd.Flags().GetString("ca-cert")
-		insecure, _ := cmd.Flags().GetBool("insecure")
-
-		// Try to load credentials from environment variables first
-		if serverURL == "" {
-			envParam := os.Getenv("AUTHPF_API_SERVER")
-			if envParam == "" {
-				serverURL = viper.GetString("auth.server")
-			} else {
-				serverURL = envParam
-			}
-		}
-		if username == "" {
-			envParam := os.Getenv("AUTHPF_API_USERNAME")
-			if envParam == "" {
-				username = viper.GetString("auth.username")
-			} else {
-				username = envParam
-			}
-		}
-		if password == "" {
-			envParam := os.Getenv("AUTHPF_API_PASSWORD")
-			if envParam == "" {
-				password = viper.GetString("auth.password")
-			} else {
-				password = envParam
-			}
-		}
-		if caCertPath == "" {
-			envParam := os.Getenv("AUTHPF_API_CACERT")
-			if envParam == "" {
-				caCertPath = viper.GetString("auth.ca_cert")
-			} else {
-				caCertPath = envParam
-			}
-		}
-		if insecure == false {
-			envParam := os.Getenv("AUTHPF_API_INSECURE")
-			if envParam == "" {
-				insecure = viper.GetBool("auth.insecure")
-			} else {
-				if strings.ToLower(envParam) == "true" {
-					insecure = true
-				}
-			}
-		}
-
-		// hash password if set
-		if len(password) > 0 {
-			pwHash, err := createSha256(password)
+		// hash password if flag used
+		if DetermineValueSource(cmd, "password", "AUTHPF_API_PASSWORD", VIPER_PARAM_PASSWORD) == "FLAG" {
+			pw, _ := cmd.Flags().GetString("password")
+			pwHash, err := createSha256(pw)
 			if err != nil {
 				return err
 			}
-			password = pwHash
+			viper.Set(VIPER_PARAM_PASSWORD, pwHash)
 		}
 
 		// Try to load credentials from file if not provided via flags or environment variables
-		if username == "" || password == "" {
+		if viper.GetString(VIPER_PARAM_USERNAME) == "" || viper.GetString(VIPER_PARAM_PASSWORD) == "" {
 			creds, err := loadCredentialsFromFile()
 			if err == nil {
-				if username == "" {
-					username = creds.Username
+				if viper.GetString(VIPER_PARAM_USERNAME) == "" {
+					viper.Set(VIPER_PARAM_USERNAME, creds.Username)
 				}
-				if password == "" {
-					password = creds.Password
+				if viper.GetString(VIPER_PARAM_PASSWORD) == "" {
+					viper.Set(VIPER_PARAM_PASSWORD, creds.Password)
 				}
 			}
 		}
 
-		if err := validateUsername(username); err != nil {
+		if err := validateUsername(viper.GetString(VIPER_PARAM_USERNAME)); err != nil {
 			return err
 		}
-		if err := validatePassword(password); err != nil {
+		if err := validatePassword(viper.GetString(VIPER_PARAM_PASSWORD)); err != nil {
 			return err
 		}
 
-		if serverURL == "" {
+		if viper.GetString(VIPER_PARAM_SERVER) == "" {
 			return fmt.Errorf("server URL is required")
 		}
 
-		if username == "" {
+		if viper.GetString(VIPER_PARAM_USERNAME) == "" {
 			return fmt.Errorf("username is required")
 		}
 
-		if password == "" {
+		if viper.GetString(VIPER_PARAM_PASSWORD) == "" {
 			return fmt.Errorf("password is required")
 		}
 
 		// Perform login
-		token, err := performLogin(serverURL, username, password, caCertPath, insecure)
+		token, err := performLogin()
 		if err != nil {
 			return fmt.Errorf("%v", err)
 		}
+		viper.Set(VIPER_PARAM_AUTHPF_TOKEN, token)
 
-		fmt.Printf("✅ Successfully logged in as %s\n", username)
+		fmt.Printf("✅ Successfully logged in as %s\n", viper.GetString(VIPER_PARAM_USERNAME))
 
 		// Save token and auth settings to config file automatically
-		if err := saveAuthToken(serverURL, username, token, caCertPath, insecure); err != nil {
+		if err := saveAuthToken(); err != nil {
 			return fmt.Errorf("failed to save token: %v", err)
 		}
 		fmt.Println("✅ Token saved to config file")
 
 		// Save credentials to credentials file if provided via flags
-		if username != "" && password != "" {
-			if err := saveCredentialsToFile(username, password); err != nil {
+		if viper.GetString(VIPER_PARAM_USERNAME) != "" && viper.GetString(VIPER_PARAM_PASSWORD) != "" {
+			if err := saveCredentialsToFile(viper.GetString(VIPER_PARAM_USERNAME), viper.GetString(VIPER_PARAM_PASSWORD)); err != nil {
 				// Don't fail the login if credentials file save fails
 				fmt.Fprintf(cmd.OutOrStderr(), "⚠️ Warning: failed to save credentials file: %v\n", err)
 			} else {
@@ -170,19 +121,13 @@ var authStatusCmd = &cobra.Command{
 	Short: "Check authentication status",
 	Long:  "Check if you are currently authenticated and validate token against server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		token := viper.GetString("auth.token")
-		// username := viper.GetString("auth.username")
-		server := viper.GetString("auth.server")
-		caCertPath := viper.GetString("auth.ca_cert")
-		insecure := viper.GetBool("auth.insecure")
-
-		if token == "" {
+		if viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
 			fmt.Println("Authentication Status: ❌ Not authenticated")
 			return nil
 		}
 
 		// Validate token against server
-		isValid, expiresAt, err := validateTokenAgainstServer(server, token, caCertPath, insecure)
+		isValid, expiresAt, err := validateTokenAgainstServer()
 		if err != nil {
 			fmt.Printf("  Token Validation: ⚠️ Warning - %v\n", err)
 		} else if isValid {
@@ -209,7 +154,7 @@ var authTokenCmd = &cobra.Command{
 	Short: "Manage tokens",
 	Long:  "View or refresh authentication tokens",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		token := viper.GetString("auth.token")
+		token := viper.GetString("api.token")
 
 		if token == "" {
 			fmt.Println("No token stored")
@@ -222,12 +167,17 @@ var authTokenCmd = &cobra.Command{
 }
 
 func init() {
-	// Login command
 	authLoginCmd.Flags().StringP("server", "s", "", "Server URL")
 	authLoginCmd.Flags().StringP("username", "u", "", "Username")
 	authLoginCmd.Flags().StringP("password", "p", "", "Password")
-	authLoginCmd.Flags().StringP("ca-cert", "c", "", "Path to CA certificate file for HTTPS verification")
+	authLoginCmd.Flags().StringP("cacert", "c", "", "Path to CA certificate file for HTTPS verification")
 	authLoginCmd.Flags().BoolP("insecure", "i", false, "Skip HTTPS certificate verification (insecure, use with caution)")
+
+	viper.BindPFlag(VIPER_PARAM_SERVER, authLoginCmd.Flags().Lookup("server"))
+	viper.BindPFlag(VIPER_PARAM_USERNAME, authLoginCmd.Flags().Lookup("username"))
+	viper.BindPFlag(VIPER_PARAM_PASSWORD, authLoginCmd.Flags().Lookup("password"))
+	viper.BindPFlag(VIPER_PARAM_CACERT, authLoginCmd.Flags().Lookup("cacert"))
+	viper.BindPFlag(VIPER_PARAM_INSECURE, authLoginCmd.Flags().Lookup("insecure"))
 
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authLogoutCmd)
@@ -235,19 +185,35 @@ func init() {
 	authCmd.AddCommand(authTokenCmd)
 }
 
+func DetermineValueSource(cmd *cobra.Command, flagName, envKey, configKey string) string {
+	if flag := cmd.Flags().Lookup(flagName); flag != nil && flag.Changed {
+		return "FLAG"
+	}
+
+	if _, exists := os.LookupEnv(envKey); exists {
+		return "ENV"
+	}
+
+	if viper.IsSet(configKey) {
+		return "CONFIG"
+	}
+
+	return "DEFAULT"
+}
+
 // performLogin authenticates against the server and returns a JWT token
-func performLogin(serverURL, username, password, caCertPath string, insecure bool) (string, error) {
+func performLogin() (string, error) {
 
 	// Verify version compatibility before attempting login
-	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+	if err := checkAPIVersionCompatibility(); err != nil {
 		return "", fmt.Errorf("version compatibility check failed: %w", err)
 	}
-	fmt.Printf("Authenticating against %s...\n", serverURL)
+	fmt.Printf("Authenticating against %s...\n", viper.GetString(VIPER_PARAM_SERVER))
 
 	// Create login request payload
 	loginReq := map[string]string{
-		"username": username,
-		"password": password,
+		"username": viper.GetString(VIPER_PARAM_USERNAME),
+		"password": viper.GetString(VIPER_PARAM_PASSWORD),
 	}
 
 	// Marshal to JSON
@@ -257,7 +223,7 @@ func performLogin(serverURL, username, password, caCertPath string, insecure boo
 	}
 
 	// Create HTTP request
-	loginURL := serverURL + "/login"
+	loginURL := viper.GetString(VIPER_PARAM_SERVER) + "/login"
 	req, err := http.NewRequest(METHOD_ENDPOINT_LOGIN, loginURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
@@ -267,24 +233,9 @@ func performLogin(serverURL, username, password, caCertPath string, insecure boo
 	req.Header.Set("Content-Type", "application/json")
 
 	// Create HTTP client with optional CA certificate or insecure mode
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-	if insecure {
-		// Skip certificate verification (insecure mode)
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		}
-	} else if caCertPath != "" {
-		tlsConfig, err := createTLSConfig(caCertPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to configure TLS: %w", err)
-		}
-		client.Transport = &http.Transport{
-			TLSClientConfig: tlsConfig,
-		}
+	client, err := NewHTTPClientWithDefaults()
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	// Send request
@@ -320,7 +271,7 @@ func performLogin(serverURL, username, password, caCertPath string, insecure boo
 }
 
 // saveAuthToken saves the authentication token and auth settings to the config file
-func saveAuthToken(serverURL, username, token, caCertPath string, insecure bool) error {
+func saveAuthToken() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -334,20 +285,21 @@ func saveAuthToken(serverURL, username, token, caCertPath string, insecure bool)
 	configFile := filepath.Join(configDir, CONFIG_FILE)
 
 	// Convert caCertPath to absolute path if provided
-	if caCertPath != "" {
-		absCertPath, err := filepath.Abs(caCertPath)
+	if viper.GetString(VIPER_PARAM_CACERT) != "" {
+		absCertPath, err := filepath.Abs(viper.GetString(VIPER_PARAM_CACERT))
 		if err != nil {
 			return fmt.Errorf("failed to convert CA cert path to absolute: %w", err)
 		}
-		caCertPath = absCertPath
+		viper.Set(VIPER_PARAM_CACERT, absCertPath)
 	}
 
-	viper.Set("auth.server", serverURL)
-	viper.Set("auth.token", token)
-	viper.Set("auth.ca_cert", caCertPath)
-	viper.Set("auth.insecure", insecure)
+	save := viper.New()
+	save.Set("api.server", viper.GetString(VIPER_PARAM_SERVER))
+	save.Set("api.token", viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
+	save.Set("api.cacert", viper.GetString(VIPER_PARAM_CACERT))
+	save.Set("api.insecure", viper.GetBool(VIPER_PARAM_INSECURE))
 
-	if err := viper.WriteConfigAs(configFile); err != nil {
+	if err := save.WriteConfigAs(configFile); err != nil {
 		return err
 	}
 
@@ -364,11 +316,7 @@ func clearAuthToken() error {
 	configDir := filepath.Join(home, CONFIG_DIR)
 	configFile := filepath.Join(configDir, CONFIG_FILE)
 
-	viper.Set("auth.token", "")
-	viper.Set("auth.username", "")
-	viper.Set("auth.server", "")
-
-	if err := viper.WriteConfigAs(configFile); err != nil {
+	if err := viper.New().WriteConfigAs(configFile); err != nil {
 		return err
 	}
 
@@ -486,35 +434,35 @@ func saveCredentialsToFile(username, password string) error {
 }
 
 // validateTokenAgainstServer validates the token against the server and returns expiration time
-func validateTokenAgainstServer(serverURL, token, caCertPath string, insecure bool) (bool, time.Time, error) {
+func validateTokenAgainstServer() (bool, time.Time, error) {
 	// First, try to extract expiration from JWT claims without verification
-	expiresAt, err := extractTokenExpiration(token)
+	expiresAt, err := extractTokenExpiration(viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 	if err != nil {
 		return false, time.Time{}, fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	// Create HTTP request to validate token against server
-	validateURL := serverURL + ENDPOINT_AUTHPF_ACTIVATE
+	validateURL := viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_ACTIVATE
 	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_VIEW, validateURL, nil)
 	if err != nil {
 		return false, expiresAt, fmt.Errorf("failed to create validation request: %w", err)
 	}
 
 	// Set authorization header with Bearer token
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 
 	// Create HTTP client with optional CA certificate or insecure mode
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	if insecure {
+	if viper.GetBool(VIPER_PARAM_INSECURE) {
 		client.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
 		}
-	} else if caCertPath != "" {
-		tlsConfig, err := createTLSConfig(caCertPath)
+	} else if viper.GetString(VIPER_PARAM_CACERT) != "" {
+		tlsConfig, err := createTLSConfig(viper.GetString(VIPER_PARAM_CACERT))
 		if err != nil {
 			return false, expiresAt, fmt.Errorf("failed to configure TLS: %w", err)
 		}

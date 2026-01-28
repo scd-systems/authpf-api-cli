@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,25 +41,22 @@ var authpfActivateCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		serverURL := viper.GetString("auth.server")
-		token := viper.GetString("auth.token")
-		username := viper.GetString("auth.username")
-
-		if serverURL == "" || token == "" {
+		if viper.GetString(VIPER_PARAM_SERVER) == "" || viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
 			return fmt.Errorf("not authenticated. Please login first")
 		}
 
 		// Get optional parameters
 		authpfUsername, _ := cmd.Flags().GetString("username")
+		viper.Set(VIPER_PARAM_AUTHPF_USERNAME, authpfUsername)
 		timeout, _ := cmd.Flags().GetString("timeout")
+		viper.Set(VIPER_PARAM_AUTHPF_TIMEOUT, timeout)
 
-		// Use provided username or fall back to authenticated user
-		if authpfUsername == "" {
-			authpfUsername = username
+		if viper.GetString(VIPER_PARAM_AUTHPF_USERNAME) == "" {
+			viper.Set(VIPER_PARAM_AUTHPF_USERNAME, viper.GetString(VIPER_PARAM_USERNAME))
 		}
 
 		// Call activate endpoint
-		if err := activateAuthPFAnchor(serverURL, token, authpfUsername, timeout); err != nil {
+		if err := activateAuthPFAnchor(); err != nil {
 			return fmt.Errorf("%v", err)
 		}
 
@@ -76,25 +72,17 @@ var authpfDeactivateCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		serverURL := viper.GetString("auth.server")
-		token := viper.GetString("auth.token")
-		username := viper.GetString("auth.username")
-
-		if serverURL == "" || token == "" {
+		if viper.GetString(VIPER_PARAM_SERVER) == "" || viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
 			return fmt.Errorf("not authenticated. Please login first")
 		}
 
 		// Get optional parameters
 		authpfUsername, _ := cmd.Flags().GetString("username")
+		viper.Set(VIPER_PARAM_AUTHPF_USERNAME, authpfUsername)
 		all, _ := cmd.Flags().GetBool("all")
 
-		// Use provided username or fall back to authenticated user
-		if authpfUsername == "" {
-			authpfUsername = username
-		}
-
 		// Call deactivate endpoint
-		if err := deactivateAuthPFAnchor(serverURL, token, authpfUsername, all); err != nil {
+		if err := deactivateAuthPFAnchor(all); err != nil {
 			return fmt.Errorf("%v", err)
 		}
 
@@ -110,25 +98,23 @@ var authpfStatusCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		serverURL := viper.GetString("auth.server")
-		token := viper.GetString("auth.token")
-		username := viper.GetString("auth.username")
 
-		if serverURL == "" || token == "" {
+		if viper.GetString(VIPER_PARAM_SERVER) == "" || viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
 			return fmt.Errorf("not authenticated. Please login first")
 		}
 
 		// Get optional parameters
 		authpfUsername, _ := cmd.Flags().GetString("username")
+		viper.Set(VIPER_PARAM_AUTHPF_USERNAME, authpfUsername)
 		all, _ := cmd.Flags().GetBool("all")
 
 		// Use provided username or fall back to authenticated user
-		if authpfUsername == "" {
-			authpfUsername = username
+		if viper.GetString(VIPER_PARAM_AUTHPF_USERNAME) == "" {
+			viper.Set(VIPER_PARAM_AUTHPF_USERNAME, viper.GetString(VIPER_PARAM_USERNAME))
 		}
 
 		// Call status endpoint
-		statusData, err := getAuthPFAnchorStatus(serverURL, token, authpfUsername, all)
+		statusData, err := getAuthPFAnchorStatus(all)
 		if err != nil {
 			return fmt.Errorf("%v", err)
 		}
@@ -199,52 +185,23 @@ func init() {
 	authpfCmd.AddCommand(authpfStatusCmd)
 }
 
-// getHTTPClientWithTLS creates an HTTP client with optional CA certificate or insecure mode
-func getHTTPClientWithTLS() (*http.Client, error) {
-	caCertPath := viper.GetString("auth.ca_cert")
-	insecure := viper.GetBool("auth.insecure")
-
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
-	if insecure {
-		// Skip certificate verification (insecure mode)
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		}
-	} else if caCertPath != "" {
-		tlsConfig, err := createTLSConfig(caCertPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to configure TLS: %w", err)
-		}
-		client.Transport = &http.Transport{
-			TLSClientConfig: tlsConfig,
-		}
-	}
-
-	return client, nil
-}
-
 // activateAuthPFAnchor sends a POST request to activate an authpf anchor
-func activateAuthPFAnchor(serverURL, token, username, timeout string) error {
+func activateAuthPFAnchor() error {
 	// Verify version compatibility before activation
-	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+	if err := checkAPIVersionCompatibility(); err != nil {
 		return fmt.Errorf("version compatibility check failed: %w", err)
 	}
 	// Build query parameters
 	params := url.Values{}
-	if username != "" {
-		params.Add("authpf_username", username)
+	if viper.GetString(VIPER_PARAM_AUTHPF_USERNAME) != "" {
+		params.Add("authpf_username", viper.GetString(VIPER_PARAM_AUTHPF_USERNAME))
 	}
-	if timeout != "" {
-		params.Add("timeout", timeout)
+	if viper.GetString(VIPER_PARAM_AUTHPF_TIMEOUT) != "" {
+		params.Add("timeout", viper.GetString(VIPER_PARAM_AUTHPF_TIMEOUT))
 	}
 
 	// Build URL
-	endpoint := serverURL + ENDPOINT_AUTHPF_ACTIVATE
+	endpoint := viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_ACTIVATE
 	if len(params) > 0 {
 		endpoint += "?" + params.Encode()
 	}
@@ -257,10 +214,10 @@ func activateAuthPFAnchor(serverURL, token, username, timeout string) error {
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 
 	// Send request
-	client, err := getHTTPClientWithTLS()
+	client, err := NewHTTPClientWithDefaults()
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -285,21 +242,21 @@ func activateAuthPFAnchor(serverURL, token, username, timeout string) error {
 }
 
 // deactivateAuthPFAnchor sends a DELETE request to deactivate an authpf anchor
-func deactivateAuthPFAnchor(serverURL, token, username string, all bool) error {
+func deactivateAuthPFAnchor(all bool) error {
 	// Verify version compatibility before deactivation
-	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+	if err := checkAPIVersionCompatibility(); err != nil {
 		return fmt.Errorf("version compatibility check failed: %w", err)
 	}
 	// Determine endpoint
-	endpoint := serverURL + ENDPOINT_AUTHPF_DEACTIVATE
+	endpoint := viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_DEACTIVATE
 	if all {
-		endpoint = serverURL + ENDPOINT_AUTHPF_ALL
+		endpoint = viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_ALL
 	}
 
 	// Build query parameters
 	params := url.Values{}
-	if username != "" && !all {
-		params.Add("authpf_username", username)
+	if viper.GetString(VIPER_PARAM_AUTHPF_USERNAME) != "" && !all {
+		params.Add("authpf_username", viper.GetString(VIPER_PARAM_AUTHPF_USERNAME))
 	}
 
 	if len(params) > 0 {
@@ -314,10 +271,10 @@ func deactivateAuthPFAnchor(serverURL, token, username string, all bool) error {
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 
 	// Send request
-	client, err := getHTTPClientWithTLS()
+	client, err := NewHTTPClientWithDefaults()
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -342,21 +299,21 @@ func deactivateAuthPFAnchor(serverURL, token, username string, all bool) error {
 }
 
 // getAuthPFAnchorStatus sends a GET request to check AuthPF anchor status
-func getAuthPFAnchorStatus(serverURL, token, username string, all bool) (interface{}, error) {
+func getAuthPFAnchorStatus(all bool) (interface{}, error) {
 	// Verify version compatibility before status check
-	if err := checkAPIVersionCompatibility(serverURL); err != nil {
+	if err := checkAPIVersionCompatibility(); err != nil {
 		return nil, fmt.Errorf("version compatibility check failed: %w", err)
 	}
 	// Build query parameters
 	params := url.Values{}
-	if username != "" {
-		params.Add("authpf_username", username)
+	if viper.GetString(VIPER_PARAM_AUTHPF_USERNAME) != "" {
+		params.Add("authpf_username", viper.GetString(VIPER_PARAM_AUTHPF_USERNAME))
 	}
 
 	// Build URL
-	endpoint := serverURL + ENDPOINT_AUTHPF_ACTIVATE
+	endpoint := viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_ACTIVATE
 	if all {
-		endpoint = serverURL + ENDPOINT_AUTHPF_ALL
+		endpoint = viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_ALL
 	}
 
 	if len(params) > 0 {
@@ -370,10 +327,10 @@ func getAuthPFAnchorStatus(serverURL, token, username string, all bool) (interfa
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 
 	// Send request
-	client, err := getHTTPClientWithTLS()
+	client, err := NewHTTPClientWithDefaults()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

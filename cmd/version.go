@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/spf13/viper"
 )
 
 // serverInfo represents the JSON response from GET /info
@@ -14,12 +16,11 @@ type serverInfo struct {
 }
 
 // getServerVersion fetches the version string from the server's /info endpoint.
-func getServerAPIVersion(serverURL string) (string, error) {
+func getServerAPIVersion(config HTTPClientConfig) (string, error) {
 	// Build the URL for the /info endpoint
-	endpoint := strings.TrimRight(serverURL, "/") + ENDPOINT_INFO
+	endpoint := strings.TrimRight(viper.GetString(VIPER_PARAM_SERVER), "/") + ENDPOINT_INFO
 
-	// Use the same HTTP client configuration as other requests
-	client, err := getHTTPClientWithTLS()
+	client, err := NewHTTPClient(config)
 	if err != nil {
 		return "", fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -80,11 +81,12 @@ func compareAPIVersions(cliVersion, serverVersion string) error {
 }
 
 // checkVersionCompatibility fetches the server version and validates it against the CLI version.
-func checkAPIVersionCompatibility(serverURL string) error {
-	srvVer, err := getServerAPIVersion(serverURL)
+func checkAPIVersionCompatibility() error {
+	srvVer, err := getServerAPIVersion(DefaultHTTPConfig())
 	if err != nil {
 		return err
 	}
+
 	// The variable 'version' is defined in cmd/root.go and holds the CLI version.
 	return compareAPIVersions(API_VERSION, srvVer)
 }
