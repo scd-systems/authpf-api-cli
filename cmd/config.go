@@ -12,55 +12,6 @@ var configCmd = &cobra.Command{
 	Long:  "Check and validate configuration",
 }
 
-// TODO: Implementation
-var configCheckCmd = &cobra.Command{
-	Use:   "check",
-	Short: "Check configuration",
-	Long:  "Check the current configuration",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath, _ := cmd.Flags().GetString("config-path")
-
-		// Server mode: check local config
-		if configPath == "" {
-			configPath = "/usr/local/etc/authpf-api.conf"
-		}
-
-		fmt.Printf("Checking configuration: %s\n", configPath)
-		fmt.Println("Configuration check:")
-		fmt.Println("  ✓ Config file found")
-		fmt.Println("  ✓ YAML syntax valid")
-		fmt.Println("  ✓ Required fields present")
-		fmt.Println("  ✓ Permissions correct")
-
-		return nil
-	},
-}
-
-// TODO: Implementation
-var configValidateCmd = &cobra.Command{
-	Use:   "validate",
-	Short: "Validate configuration",
-	Long:  "Validate the configuration for correctness and completeness",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath, _ := cmd.Flags().GetString("config-path")
-
-		// Server mode: validate local config
-		if configPath == "" {
-			configPath = "/usr/local/etc/authpf-api.conf"
-		}
-
-		fmt.Printf("Validating configuration: %s\n", configPath)
-		fmt.Println("Validation results:")
-		fmt.Println("  ✓ Server section valid")
-		fmt.Println("  ✓ AuthPF section valid")
-		fmt.Println("  ✓ RBAC section valid")
-		fmt.Println("  ✓ All required fields present")
-		fmt.Println("\nConfiguration is valid!")
-
-		return nil
-	},
-}
-
 var configShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show configuration",
@@ -136,17 +87,8 @@ var configShowCmd = &cobra.Command{
 }
 
 func init() {
-	// Check command
-	configCheckCmd.Flags().StringP("config-path", "c", "", "Path to config file")
-	configCheckCmd.Flags().StringP("server", "s", "", "Server URL (for client mode)")
-
-	// Validate command
-	configValidateCmd.Flags().StringP("config-path", "c", "", "Path to config file")
-	configValidateCmd.Flags().StringP("server", "s", "", "Server URL (for client mode)")
-
 	// Show command
 	configShowCmd.Flags().StringP("config-path", "c", "", "Path to config file")
-	configShowCmd.Flags().StringP("server", "s", "", "Server URL (for client mode)")
 
 	// configCmd.AddCommand(configCheckCmd)
 	// configCmd.AddCommand(configValidateCmd)
