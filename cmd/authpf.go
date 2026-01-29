@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -100,6 +99,14 @@ var authpfStatusCmd = &cobra.Command{
 
 		if viper.GetString(VIPER_PARAM_SERVER) == "" || viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
 			return fmt.Errorf("not authenticated. Please login first")
+		}
+
+		isValid, _, err := validateTokenAgainstServer()
+		if err != nil {
+			return fmt.Errorf("Token Validation Error: %v\n", err)
+		}
+		if !isValid {
+			return fmt.Errorf("Token Validation: invalid/expired")
 		}
 
 		// Get optional parameters
@@ -289,37 +296,6 @@ func getAuthPFAnchorStatus(all bool) (interface{}, error) {
 
 	// Return the response with server time for client-side calculations
 	return &apiResponse, nil
-}
-
-func sendRequest(url string, method string) ([]byte, int, error) {
-	// Create request
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
-
-	// Send request
-	client, err := NewHTTPClientWithDefaults()
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create HTTP client: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	return body, resp.StatusCode, nil
 }
 
 // formatAuthPFStatus formats the status for display

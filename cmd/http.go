@@ -2,8 +2,10 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -75,4 +77,35 @@ func NewHTTPClientWithTimeout(timeout time.Duration) (*http.Client, error) {
 	config := DefaultHTTPConfig()
 	config.Timeout = timeout
 	return NewHTTPClient(config)
+}
+
+func sendRequest(url string, method string, data ...byte) ([]byte, int, error) {
+	// Create request
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(data))
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
+
+	// Send request
+	client, err := NewHTTPClientWithDefaults()
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create HTTP client: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return body, resp.StatusCode, nil
 }

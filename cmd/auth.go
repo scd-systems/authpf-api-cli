@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -103,9 +101,11 @@ var authLoginCmd = &cobra.Command{
 }
 
 var authLogoutCmd = &cobra.Command{
-	Use:   "logout",
-	Short: "Logout from server",
-	Long:  "Clear stored authentication token",
+	Use:           "logout",
+	Short:         "Logout from server",
+	Long:          "Clear stored authentication token",
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := clearAuthToken(); err != nil {
 			return fmt.Errorf("failed to logout: %w", err)
@@ -117,9 +117,11 @@ var authLogoutCmd = &cobra.Command{
 }
 
 var authStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Check authentication status",
-	Long:  "Check if you are currently authenticated and validate token against server",
+	Use:           "status",
+	Short:         "Check authentication status",
+	Long:          "Check if you are currently authenticated and validate token against server",
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
 			fmt.Println("Authentication Status: ❌ Not authenticated")
@@ -129,20 +131,20 @@ var authStatusCmd = &cobra.Command{
 		// Validate token against server
 		isValid, expiresAt, err := validateTokenAgainstServer()
 		if err != nil {
-			fmt.Printf("  Token Validation: ⚠️ Warning - %v\n", err)
+			return fmt.Errorf("Token Validation: %v\n", err)
 		} else if isValid {
-			fmt.Println("  Token Validation: ✅ Valid")
 			if !expiresAt.IsZero() {
 				duration := time.Until(expiresAt)
 				if duration > 0 {
+					fmt.Println("Token Validation: ✅ Valid")
 					fmt.Printf("  Expires in: %s\n", formatDuration(duration))
 					fmt.Printf("  Expires at: %s\n", expiresAt.Format("2006-01-02 15:04:05 MST"))
 				} else {
-					fmt.Println("  Token Status: ❌ Expired")
+					return fmt.Errorf("Token Status: Expired")
 				}
 			}
 		} else {
-			fmt.Println("  Token Validation: ❌ Invalid")
+			return fmt.Errorf("Token Validation: invalid/expired")
 		}
 
 		return nil
@@ -224,41 +226,20 @@ func performLogin() (string, error) {
 
 	// Create HTTP request
 	loginURL := viper.GetString(VIPER_PARAM_SERVER) + "/login"
-	req, err := http.NewRequest(METHOD_ENDPOINT_LOGIN, loginURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-
-	// Create HTTP client with optional CA certificate or insecure mode
-	client, err := NewHTTPClientWithDefaults()
+	responseBody, responseStatusCode, err := sendRequest(loginURL, METHOD_ENDPOINT_LOGIN, jsonData...)
 	if err != nil {
-		return "", fmt.Errorf("failed to create HTTP client: %w", err)
-	}
-
-	// Send request
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send login request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return "", err
 	}
 
 	// Check HTTP status
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
+	if responseStatusCode != http.StatusOK {
+		return "", fmt.Errorf("login failed with status %d: %s", responseStatusCode, string(responseBody))
 	}
 
 	// Parse response
 	var loginResp map[string]string
-	if err := json.Unmarshal(body, &loginResp); err != nil {
+	if err := json.Unmarshal(responseBody, &loginResp); err != nil {
 		return "", fmt.Errorf("failed to parse login response: %w", err)
 	}
 
@@ -441,57 +422,21 @@ func validateTokenAgainstServer() (bool, time.Time, error) {
 		return false, time.Time{}, fmt.Errorf("failed to parse token: %w", err)
 	}
 
-	// Create HTTP request to validate token against server
 	validateURL := viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_ACTIVATE
-	req, err := http.NewRequest(METHOD_ENDPOINT_AUTHPF_VIEW, validateURL, nil)
+
+	responseBody, responseStatusCode, err := sendRequest(validateURL, METHOD_ENDPOINT_AUTHPF_VIEW)
 	if err != nil {
-		return false, expiresAt, fmt.Errorf("failed to create validation request: %w", err)
+		return false, expiresAt, err
 	}
-
-	// Set authorization header with Bearer token
-	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
-
-	// Create HTTP client with optional CA certificate or insecure mode
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-	if viper.GetBool(VIPER_PARAM_INSECURE) {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		}
-	} else if viper.GetString(VIPER_PARAM_CACERT) != "" {
-		tlsConfig, err := createTLSConfig(viper.GetString(VIPER_PARAM_CACERT))
-		if err != nil {
-			return false, expiresAt, fmt.Errorf("failed to configure TLS: %w", err)
-		}
-		client.Transport = &http.Transport{
-			TLSClientConfig: tlsConfig,
-		}
-	}
-
-	// Send request
-	resp, err := client.Do(req)
-	if err != nil {
-		return false, expiresAt, fmt.Errorf("failed to send validation request: %w", err)
-	}
-	defer resp.Body.Close()
 
 	// Check HTTP status
-	if resp.StatusCode == http.StatusOK {
+	if responseStatusCode == http.StatusOK {
 		return true, expiresAt, nil
-	} else if resp.StatusCode == http.StatusUnauthorized {
+	} else if responseStatusCode == http.StatusUnauthorized {
 		return false, expiresAt, nil
 	}
 
-	// Read response body for error details
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, expiresAt, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	return false, expiresAt, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+	return false, expiresAt, fmt.Errorf("server returned status %d: %s", responseStatusCode, string(responseBody))
 }
 
 // extractTokenExpiration extracts the expiration time from a JWT token without verification
