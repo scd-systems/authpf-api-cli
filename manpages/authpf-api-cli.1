@@ -1,0 +1,374 @@
+.nh
+.TH authpf-api-cli(1) - Command-line tool for authpf-api server and client operations
+.SH NAME
+\fBauthpf-api-cli\fP — Command-line tool for managing authpf-api server and performing client operations
+
+.SH SYNOPSIS
+.IP \(bu 2
+\fBauthpf-api-cli\fR [\fB--config\fR FILE] [\fB--verbose\fR] [\fBCOMMAND\fR] [\fBOPTIONS\fR]
+.IP \(bu 2
+\fBauthpf-api-cli auth\fR [\fBlogin|logout|status\fR]
+.IP \(bu 2
+\fBauthpf-api-cli authpf\fR [\fBactivate|deactivate|status\fR]
+.IP \(bu 2
+\fBauthpf-api-cli user\fR [\fBcreate|modify|delete|list\fR]
+.IP \(bu 2
+\fBauthpf-api-cli config\fR [\fBshow\fR]
+
+.SH DESCRIPTION
+\fBauthpf-api-cli\fP is a command-line tool for managing the \fBauthpf-api\fP server and performing client operations. It can be used both on the server (for user and pf anchor management) and on the client (for authentication and anchor loading).
+
+.PP
+The tool provides functionality for:
+.IP \(bu 2
+\fBAuthentication\fP: Login/logout and manage JWT tokens for secure API access
+.IP \(bu 2
+\fBRule Management\fP: Activate and deactivate PF user anchors with configurable timeouts
+.IP \(bu 2
+\fBConfiguration\fP: Check and validate server configuration
+.IP \(bu 2
+\fBUser Management\fP: Create, modify, and delete users with secure password hashing
+.IP \(bu 2
+\fBStatus Monitoring\fP: Check server and client status, view active sessions and loaded anchors
+
+.SH GLOBAL OPTIONS
+.TP
+\fB--config\fP \fIfile\fP
+Path to the configuration file. Defaults to \fB~/.authpf-api-cli/config\fR if not set.
+
+.TP
+\fB--verbose\fP, \fB-v\fP
+Enable verbose output for debugging purposes.
+
+.TP
+\fB--help\fP, \fB-h\fP
+Display help information and exit.
+
+.TP
+\fB--version\fP
+Display version information and exit.
+
+.SH COMMANDS
+.SS auth
+Authentication and session management
+
+.PP
+\fBauth login\fP
+  Authenticate with the authpf-api server and obtain a JWT token.
+
+.PP
+\fBOptions:\fP
+.TP
+\fB--server\fP \fIURL\fP
+URL of the authpf-api server (e.g., https://api.example.com). Required for first login.
+
+.TP
+\fB--username\fP \fIUSERNAME\fP
+Username for authentication. Required for first login.
+
+.TP
+\fB--password\fP \fIPASSWORD\fP
+Password for authentication. Required for first login. If not provided, will prompt interactively.
+
+.TP
+\fB--cacert\fP \fIFILE\fP, \fB-c\fP \fIFILE\fP
+Path to a custom CA certificate file for HTTPS connections with self-signed certificates.
+
+.TP
+\fB--insecure\fP
+Skip TLS certificate verification (not recommended for production).
+
+.SS auth logout
+Logout from the authpf-api server and remove the stored JWT token.
+
+.SS auth status
+Display the current authentication status and token information.
+
+.SS authpf
+PF anchor management
+
+.SS authpf activate
+Activate pf rules for the authenticated user.
+
+.PP
+\fBOptions:\fP
+.TP
+\fB--timeout\fP \fITIME\fP, \fB-t\fP \fITIME\fP
+Override the default timeout for rule activation (e.g., 30m, 1h, 2h). Default is configured on the server.
+
+.TP
+\fB--username\fP \fIUSERNAME\fP, \fB-u\fP \fIUSERNAME\fP
+Activate rules for another user (requires appropriate permissions).
+
+.SS authpf deactivate
+Deactivate pf rules for the authenticated user.
+
+.PP
+\fBOptions:\fP
+.TP
+\fBusername\fP \fIUSERNAME\fP, \fB-u\fP \fIUSERNAME\fP
+Deactivate rules for another user (requires appropriate permissions).
+
+.TP
+\fBall\fP
+Deactivate all activated rules (admin only).
+
+.SS authpf status
+Display the status of activated pf rules.
+
+.PP
+\fBOptions:\fP
+.TP
+\fBall\fP
+Display status of all activated rules (admin only).
+
+.SS user
+User management (server-side)
+
+.SS user create
+Create a new user on the authpf-api server.
+
+.PP
+\fBOptions:\fP
+.TP
+\fBusername\fP \fIUSERNAME\fP
+Username for the new user. Required.
+
+.TP
+\fBpassword\fP \fIPASSWORD\fP
+Password for the new user. Required. If not provided, will prompt interactively.
+
+.TP
+\fBrole\fP \fIROLE\fP
+User role: \fBuser\fR or \fBadmin\fR\&. Default is \fBuser\fR\&.
+
+.SS user modify
+Modify an existing user on the authpf-api server.
+
+.PP
+\fBOptions:\fP
+.TP
+\fBusername\fP \fIUSERNAME\fP
+Username of the user to modify. Required.
+
+.TP
+\fBpassword\fP \fIPASSWORD\fP
+New password for the user. If not provided, password remains unchanged.
+
+.TP
+\fBrole\fP \fIROLE\fP
+New role for the user: \fBuser\fR or \fBadmin\fR\&.
+
+.SS user delete
+Delete a user from the authpf-api server.
+
+.PP
+\fBOptions:\fP
+.TP
+\fBusername\fP \fIUSERNAME\fP
+Username of the user to delete. Required.
+
+.SS user list
+List all users on the authpf-api server.
+
+.SS config
+Configuration management
+
+.SS config show
+Display the current server configuration.
+
+.SH ENVIRONMENT
+.TP
+\fBAUTHPF_API_SERVER\fP
+URL of the authpf-api server. Overrides the configured server value.
+
+.TP
+\fBAUTHPF_API_USERNAME\fP
+Username for authentication. Overrides the configured username.
+
+.TP
+\fBAUTHPF_API_PASSWORD\fP
+Password for authentication. Overrides the configured password.
+
+.TP
+\fBAUTHPF_API_TOKEN\fP
+JWT token for authentication. Overrides the stored token.
+
+.TP
+\fBAUTHPF_API_CACERT\fP
+Path to a custom CA certificate file.
+
+.TP
+\fBAUTHPF_API_INSECURE\fP
+Skip TLS certificate verification if set to \fBtrue\fR\&.
+
+.TP
+\fBAUTHPF_API_AUTHPF_USERNAME\fP
+Default authpf username for operations.
+
+.TP
+\fBAUTHPF_API_AUTHPF_TIMEOUT\fP
+Default timeout for authpf rule activation.
+
+.SH CONFIGURATION
+\fBauthpf-api-cli\fP is configured via a YAML configuration file, typically located at \fB~/.authpf-api-cli/config\fR\&. The configuration file stores:
+.IP \(bu 2
+API server URL
+.IP \(bu 2
+JWT token (automatically stored after login)
+.IP \(bu 2
+CA certificate path for HTTPS connections
+
+.PP
+\fBExample configuration file:\fP
+
+.EX
+api:
+  server: https://api.example.com
+  token: ""
+  cacert: ""
+  insecure: false
+.EE
+
+.SH EXAMPLES
+.TP
+\fBLogin to API and get Token\fP
+authpf-api-cli auth login --server https://api.example.com --username john --password mypassword
+
+authpf-api-cli auth login --server https://api.example.com --username john --password mypassword -c ca-root.crt
+
+.TP
+\fBLogout from API\fP
+authpf-api-cli auth logout
+
+.TP
+\fBShow Auth Status\fP
+authpf-api-cli auth status
+
+.TP
+\fBActivate AuthPF Anchor\fP
+authpf-api-cli authpf activate
+
+authpf-api-cli authpf activate -t 1h
+
+authpf-api-cli authpf activate -u user2
+
+.TP
+\fBDeactivate Anchor\fP
+authpf-api-cli authpf deactivate
+
+authpf-api-cli authpf deactivate -u user2
+
+authpf-api-cli authpf deactivate --all
+
+.TP
+\fBShow Anchor Status (activated)\fP
+authpf-api-cli authpf status
+
+authpf-api-cli authpf status --all
+
+.TP
+\fBCreate API User\fP
+authpf-api-cli user create --username john --password mypassword --role user
+
+authpf-api-cli user create --username admin1 --password adminpass --role admin
+
+.TP
+\fBModify API User\fP
+authpf-api-cli user modify --username john --password newpassword
+
+authpf-api-cli user modify --username john --role admin
+
+.TP
+\fBRemove API User\fP
+authpf-api-cli user delete --username john
+
+.TP
+\fBList API Users\fP
+authpf-api-cli user list
+
+.TP
+\fBShow current API Config\fP
+authpf-api-cli config show
+
+.SS Typical AuthPF User Workflow
+.EX
+# Step 1: Login to the server (only required for first time)
+authpf-api-cli auth login --server https://api.example.com --username alice --password pass123
+
+# To get a new token (if already configured server and username/password)
+authpf-api-cli auth login
+
+# Step 2: Check login status
+authpf-api-cli auth status
+
+# Step 3: Activate your anchors
+authpf-api-cli authpf activate
+
+# Step 4: Check anchor status
+authpf-api-cli authpf status
+
+# Step 5: When done - deactivate anchors
+authpf-api-cli authpf deactivate
+
+# Step 6: Logout
+authpf-api-cli auth logout
+.EE
+
+.SS Server Administrator Workflow
+.EX
+# Create a new user
+authpf-api-cli user create --username john --password mypassword --role user
+
+# Change a user's password
+authpf-api-cli user modify --username john --password newpassword
+
+# Promote user to admin
+authpf-api-cli user modify --username john --role admin
+
+# List all users
+authpf-api-cli user list
+
+# Delete a user
+authpf-api-cli user delete --username john
+
+# Display configuration
+authpf-api-cli config show
+.EE
+
+.SS Advanced Usage
+.EX
+# Login with custom CA certificate
+authpf-api-cli auth login --server https://api.example.com --username john --password pass -c /path/to/ca.crt
+
+# Activate anchor for 2 hours
+authpf-api-cli authpf activate -t 2h
+
+# Activate another user's anchor (admin only)
+authpf-api-cli authpf activate -u user2
+
+# Check all active connections (admin only)
+authpf-api-cli authpf status --all
+
+# Deactivate all anchors (admin only)
+authpf-api-cli authpf deactivate --all
+
+# Verbose output for debugging
+authpf-api-cli --verbose auth login --server https://api.example.com --username john --password pass
+.EE
+
+.SH FILES
+.IP \(bu 2
+\fB~/.authpf-api-cli/config\fR — Default configuration file
+.IP \(bu 2
+\fB~/.authpf-api-cli/credentials\fR — Credentials File (Username, Hashed Password)
+
+.SH SEE ALSO
+.IP \(bu 2
+\fBauthpf-api.conf(5)\fR — Configuration file for authpf-api
+
+.SH HISTORY
+\fBauthpf-api-cli\fP was created as a command-line interface to the \fBauthpf-api\fP server, providing both client-side operations (authentication, rule activation/deactivation) and server-side administration (user management, configuration).
+
+.SH AUTHORS
+bofh@scd-systems.net
