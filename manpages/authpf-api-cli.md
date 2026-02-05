@@ -309,12 +309,14 @@ authpf-api-cli --verbose auth login --server https://api.example.com --username 
 
 ## FILES
 
-- `~/.authpf-api-cli/config` — Default configuration file
-- `~/.authpf-api-cli/credentials` — Credentials File (Username, Hashed Password)
+```
+~/.authpf-api-cli/config — Default configuration file
+~/.authpf-api-cli/credentials — Credentials File (Username, Hashed Password)
+```
 
 ## SEE ALSO
 
-- `authpf-api.conf(5)` — Configuration file for authpf-api
+authpf-api.conf(5)
 
 ## HISTORY
 
