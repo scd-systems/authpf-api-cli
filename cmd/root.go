@@ -40,6 +40,18 @@ and on the client (for authentication and anchor loading).`,
 func Execute(ver string) error {
 	version = ver
 	rootCmd.Version = ver
+
+	// Check for --version or -V flag before Cobra processes it
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-V" {
+			initConfig()
+			if err := DisplayVersionInfo(ver); err != nil {
+				return err
+			}
+			os.Exit(0)
+		}
+	}
+
 	return rootCmd.Execute()
 }
 
