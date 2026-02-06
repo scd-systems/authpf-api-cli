@@ -6,11 +6,7 @@
 
 ## SYNOPSIS
 
-- `authpf-api-cli` [`--config` FILE] [`--verbose`] [`COMMAND`] [`OPTIONS`]
-- `authpf-api-cli auth` [`login|logout|status`]
-- `authpf-api-cli authpf` [`activate|deactivate|status`]
-- `authpf-api-cli user` [`create|modify|delete|list`]
-- `authpf-api-cli config` [`show`]
+**authpf-api-cli** [*GLOBAL-OPTIONS*] *COMMANDS* [*OPTIONS*]
 
 ## DESCRIPTION
 
