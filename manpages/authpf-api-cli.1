@@ -358,14 +358,13 @@ authpf-api-cli --verbose auth login --server https://api.example.com --username 
 .EE
 
 .SH FILES
-.IP \(bu 2
-\fB~/.authpf-api-cli/config\fR — Default configuration file
-.IP \(bu 2
-\fB~/.authpf-api-cli/credentials\fR — Credentials File (Username, Hashed Password)
+.EX
+~/.authpf-api-cli/config — Default configuration file
+~/.authpf-api-cli/credentials — Credentials File (Username, Hashed Password)
+.EE
 
 .SH SEE ALSO
-.IP \(bu 2
-\fBauthpf-api.conf(5)\fR — Configuration file for authpf-api
+authpf-api.conf(5)
 
 .SH HISTORY
 \fBauthpf-api-cli\fP was created as a command-line interface to the \fBauthpf-api\fP server, providing both client-side operations (authentication, rule activation/deactivation) and server-side administration (user management, configuration).
