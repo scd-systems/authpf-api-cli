@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -175,11 +176,11 @@ func init() {
 	authLoginCmd.Flags().StringP("cacert", "c", "", "Path to CA certificate file for HTTPS verification")
 	authLoginCmd.Flags().BoolP("insecure", "i", false, "Skip HTTPS certificate verification (insecure, use with caution)")
 
-	viper.BindPFlag(VIPER_PARAM_SERVER, authLoginCmd.Flags().Lookup("server"))
-	viper.BindPFlag(VIPER_PARAM_USERNAME, authLoginCmd.Flags().Lookup("username"))
-	viper.BindPFlag(VIPER_PARAM_PASSWORD, authLoginCmd.Flags().Lookup("password"))
-	viper.BindPFlag(VIPER_PARAM_CACERT, authLoginCmd.Flags().Lookup("cacert"))
-	viper.BindPFlag(VIPER_PARAM_INSECURE, authLoginCmd.Flags().Lookup("insecure"))
+	if err := viper.BindPFlag(VIPER_PARAM_SERVER, authLoginCmd.Flags().Lookup("server")); err != nil { log.Fatal(err.Error())}
+	if err := viper.BindPFlag(VIPER_PARAM_USERNAME, authLoginCmd.Flags().Lookup("username")); err != nil { log.Fatal(err.Error())}
+	if err := viper.BindPFlag(VIPER_PARAM_PASSWORD, authLoginCmd.Flags().Lookup("password")); err != nil { log.Fatal(err.Error())}
+	if err := viper.BindPFlag(VIPER_PARAM_CACERT, authLoginCmd.Flags().Lookup("cacert")); err != nil { log.Fatal(err.Error())}
+	if err := viper.BindPFlag(VIPER_PARAM_INSECURE, authLoginCmd.Flags().Lookup("insecure")); err != nil { log.Fatal(err.Error())}
 
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authLogoutCmd)
