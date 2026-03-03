@@ -103,10 +103,10 @@ var authpfStatusCmd = &cobra.Command{
 
 		isValid, _, err := validateTokenAgainstServer()
 		if err != nil {
-			return fmt.Errorf("Token Validation Error: %v\n", err)
+			return fmt.Errorf("token validation: %v", err)
 		}
 		if !isValid {
-			return fmt.Errorf("Token Validation: invalid/expired")
+			return fmt.Errorf("token validation: invalid/expired")
 		}
 
 		// Get optional parameters

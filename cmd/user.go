@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scd-systems/authpf-api/pkg/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -34,13 +35,13 @@ var userCreateCmd = &cobra.Command{
 		}
 
 		// Load config
-		config, err := loadConfig(configPath)
+		cfg, err := loadConfig(configPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
 		// Check if user already exists
-		if _, exists := config.Rbac.Users[username]; exists {
+		if _, exists := cfg.Rbac.Users[username]; exists {
 			return fmt.Errorf("user %s already exists", username)
 		}
 
@@ -51,11 +52,12 @@ var userCreateCmd = &cobra.Command{
 		hashedPassword := string(hashedPasswordBytes)
 
 		// Create user
-		if config.Rbac.Users == nil {
-			config.Rbac.Users = make(map[string]ConfigFileRbacUsers)
+		if cfg.Rbac.Users == nil {
+			cfg.Rbac.Users = make(map[string]config.ConfigFileRbacUsers)
+
 		}
 
-		newUser := ConfigFileRbacUsers{
+		newUser := config.ConfigFileRbacUsers{
 			Password: hashedPassword,
 			Role:     role,
 		}
@@ -64,10 +66,10 @@ var userCreateCmd = &cobra.Command{
 			newUser.UserID = userID
 		}
 
-		config.Rbac.Users[username] = newUser
+		cfg.Rbac.Users[username] = newUser
 
 		// Save config
-		if err := saveConfig(configPath, config); err != nil {
+		if err := saveConfig(configPath, cfg); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
@@ -263,13 +265,13 @@ func init() {
 }
 
 // Helper functions
-func loadConfig(configPath string) (*ConfigFile, error) {
+func loadConfig(configPath string) (*config.ConfigFile, error) {
 	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	config := &ConfigFile{}
+	config := &config.ConfigFile{}
 	err = yaml.Unmarshal(yamlFile, config)
 	if err != nil {
 		return nil, err
@@ -278,7 +280,7 @@ func loadConfig(configPath string) (*ConfigFile, error) {
 	return config, nil
 }
 
-func saveConfig(configPath string, config *ConfigFile) error {
+func saveConfig(configPath string, config *config.ConfigFile) error {
 	// Read the entire file to preserve other sections
 	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {

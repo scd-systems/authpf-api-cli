@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	config "github.com/scd-systems/authpf-api/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
@@ -17,7 +18,7 @@ func TestLoadConfig(t *testing.T) {
 		name      string
 		content   string
 		wantError bool
-		validate  func(*ConfigFile) bool
+		validate  func(*config.ConfigFile) bool
 	}{
 		{
 			name: "valid config",
@@ -33,7 +34,7 @@ func TestLoadConfig(t *testing.T) {
       role: admin
       userId: 1`,
 			wantError: false,
-			validate: func(cf *ConfigFile) bool {
+			validate: func(cf *config.ConfigFile) bool {
 				return cf.Rbac.Users["testuser"].Password == "abc123" &&
 					cf.Rbac.Users["testuser"].Role == "admin" &&
 					cf.Rbac.Users["testuser"].UserID == 1
@@ -45,7 +46,7 @@ func TestLoadConfig(t *testing.T) {
   roles: {}
   users: {}`,
 			wantError: false,
-			validate: func(cf *ConfigFile) bool {
+			validate: func(cf *config.ConfigFile) bool {
 				return len(cf.Rbac.Users) == 0
 			},
 		},
@@ -99,20 +100,20 @@ func TestLoadConfigFileNotFound(t *testing.T) {
 func TestSaveConfig(t *testing.T) {
 	tests := []struct {
 		name      string
-		config    *ConfigFile
+		config    *config.ConfigFile
 		wantError bool
 		validate  func(string) bool
 	}{
 		{
 			name: "save simple config",
-			config: &ConfigFile{
-				Rbac: ConfigFileRbac{
-					Roles: map[string]ConfigFileRbacRoles{
+			config: &config.ConfigFile{
+				Rbac: config.ConfigFileRbac{
+					Roles: map[string]config.ConfigFileRbacRoles{
 						"admin": {
 							Permissions: []string{"read", "write"},
 						},
 					},
-					Users: map[string]ConfigFileRbacUsers{
+					Users: map[string]config.ConfigFileRbacUsers{
 						"testuser": {
 							Password: "hashedpassword",
 							Role:     "admin",
@@ -128,7 +129,7 @@ func TestSaveConfig(t *testing.T) {
 					return false
 				}
 
-				var config ConfigFile
+				var config config.ConfigFile
 				err = yaml.Unmarshal(data, &config)
 				if err != nil {
 					return false
@@ -141,10 +142,10 @@ func TestSaveConfig(t *testing.T) {
 		},
 		{
 			name: "save config without user id",
-			config: &ConfigFile{
-				Rbac: ConfigFileRbac{
-					Roles: map[string]ConfigFileRbacRoles{},
-					Users: map[string]ConfigFileRbacUsers{
+			config: &config.ConfigFile{
+				Rbac: config.ConfigFileRbac{
+					Roles: map[string]config.ConfigFileRbacRoles{},
+					Users: map[string]config.ConfigFileRbacUsers{
 						"user2": {
 							Password: "hash2",
 							Role:     "user",
@@ -249,7 +250,7 @@ func TestConfigFileStructures(t *testing.T) {
 		{
 			name: "ConfigFileRbacUsers structure",
 			testFunc: func(t *testing.T) {
-				user := ConfigFileRbacUsers{
+				user := config.ConfigFileRbacUsers{
 					Password: "hash",
 					Role:     "admin",
 					UserID:   42,
@@ -262,7 +263,7 @@ func TestConfigFileStructures(t *testing.T) {
 		{
 			name: "ConfigFileRbacRoles structure",
 			testFunc: func(t *testing.T) {
-				role := ConfigFileRbacRoles{
+				role := config.ConfigFileRbacRoles{
 					Permissions: []string{"read", "write", "delete"},
 				}
 				if len(role.Permissions) != 3 {
@@ -273,10 +274,10 @@ func TestConfigFileStructures(t *testing.T) {
 		{
 			name: "ConfigFile structure",
 			testFunc: func(t *testing.T) {
-				config := &ConfigFile{
-					Rbac: ConfigFileRbac{
-						Roles: make(map[string]ConfigFileRbacRoles),
-						Users: make(map[string]ConfigFileRbacUsers),
+				config := &config.ConfigFile{
+					Rbac: config.ConfigFileRbac{
+						Roles: make(map[string]config.ConfigFileRbacRoles),
+						Users: make(map[string]config.ConfigFileRbacUsers),
 					},
 				}
 				if config.Rbac.Roles == nil || config.Rbac.Users == nil {
@@ -325,20 +326,20 @@ func TestLoadAndSaveRoundTrip(t *testing.T) {
 	tmpFile.Close()
 
 	// Load config
-	config, err := loadConfig(tmpFile.Name())
+	cfg, err := loadConfig(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("loadConfig() failed: %v", err)
 	}
 
 	// Modify config
-	config.Rbac.Users["charlie"] = ConfigFileRbacUsers{
+	cfg.Rbac.Users["charlie"] = config.ConfigFileRbacUsers{
 		Password: "charliehash",
 		Role:     "user",
 		UserID:   3,
 	}
 
 	// Save config
-	err = saveConfig(tmpFile.Name(), config)
+	err = saveConfig(tmpFile.Name(), cfg)
 	if err != nil {
 		t.Fatalf("saveConfig() failed: %v", err)
 	}
@@ -381,22 +382,22 @@ func TestEmptyUsersMap(t *testing.T) {
 	}
 	tmpFile.Close()
 
-	config, err := loadConfig(tmpFile.Name())
+	cfg, err := loadConfig(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("loadConfig() failed: %v", err)
 	}
 
 	// Add user to empty map
-	if config.Rbac.Users == nil {
-		config.Rbac.Users = make(map[string]ConfigFileRbacUsers)
+	if cfg.Rbac.Users == nil {
+		cfg.Rbac.Users = make(map[string]config.ConfigFileRbacUsers)
 	}
 
-	config.Rbac.Users["newuser"] = ConfigFileRbacUsers{
+	cfg.Rbac.Users["newuser"] = config.ConfigFileRbacUsers{
 		Password: "newhash",
 		Role:     "user",
 	}
 
-	err = saveConfig(tmpFile.Name(), config)
+	err = saveConfig(tmpFile.Name(), cfg)
 	if err != nil {
 		t.Fatalf("saveConfig() failed: %v", err)
 	}
@@ -425,7 +426,7 @@ func TestYAMLUnmarshalWithOmitEmpty(t *testing.T) {
       role: user
       userId: 5`
 
-	var config ConfigFile
+	var config config.ConfigFile
 	err := yaml.Unmarshal([]byte(yamlContent), &config)
 	if err != nil {
 		t.Fatalf("yaml.Unmarshal() failed: %v", err)
@@ -459,14 +460,14 @@ func TestMultipleUsersHandling(t *testing.T) {
 	}
 	tmpFile.Close()
 
-	config, err := loadConfig(tmpFile.Name())
+	cfg, err := loadConfig(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("loadConfig() failed: %v", err)
 	}
 
 	// Add multiple users
-	if config.Rbac.Users == nil {
-		config.Rbac.Users = make(map[string]ConfigFileRbacUsers)
+	if cfg.Rbac.Users == nil {
+		cfg.Rbac.Users = make(map[string]config.ConfigFileRbacUsers)
 	}
 
 	users := []struct {
@@ -482,14 +483,14 @@ func TestMultipleUsersHandling(t *testing.T) {
 	}
 
 	for _, u := range users {
-		config.Rbac.Users[u.username] = ConfigFileRbacUsers{
+		cfg.Rbac.Users[u.username] = config.ConfigFileRbacUsers{
 			Password: u.password,
 			Role:     u.role,
 			UserID:   u.userID,
 		}
 	}
 
-	err = saveConfig(tmpFile.Name(), config)
+	err = saveConfig(tmpFile.Name(), cfg)
 	if err != nil {
 		t.Fatalf("saveConfig() failed: %v", err)
 	}
@@ -546,22 +547,22 @@ func TestConfigPathHandling(t *testing.T) {
 	}
 
 	// Test loading from custom path
-	config, err := loadConfig(configPath)
+	cfg, err := loadConfig(configPath)
 	if err != nil {
 		t.Fatalf("loadConfig() with custom path failed: %v", err)
 	}
 
-	assert.NotNil(t, config)
+	assert.NotNil(t, cfg)
 
 	// Test saving to custom path
-	config.Rbac.Users = map[string]ConfigFileRbacUsers{
+	cfg.Rbac.Users = map[string]config.ConfigFileRbacUsers{
 		"testuser": {
 			Password: "testhash",
 			Role:     "admin",
 		},
 	}
 
-	err = saveConfig(configPath, config)
+	err = saveConfig(configPath, cfg)
 	if err != nil {
 		t.Fatalf("saveConfig() with custom path failed: %v", err)
 	}

@@ -9,8 +9,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-const API_VERSION = "1.1"
-
 const (
 	VIPER_PARAM_USERNAME        = "api.username"
 	VIPER_PARAM_PASSWORD        = "api.password"

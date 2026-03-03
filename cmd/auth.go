@@ -132,7 +132,7 @@ var authStatusCmd = &cobra.Command{
 		// Validate token against server
 		isValid, expiresAt, err := validateTokenAgainstServer()
 		if err != nil {
-			return fmt.Errorf("Token Validation: %v\n", err)
+			return fmt.Errorf("token validation: %v", err) // noqa: ST1005
 		} else if isValid {
 			if !expiresAt.IsZero() {
 				duration := time.Until(expiresAt)
@@ -141,11 +141,11 @@ var authStatusCmd = &cobra.Command{
 					fmt.Printf("  Expires in: %s\n", formatDuration(duration))
 					fmt.Printf("  Expires at: %s\n", expiresAt.Format("2006-01-02 15:04:05 MST"))
 				} else {
-					return fmt.Errorf("Token Status: Expired")
+					return fmt.Errorf("token status: expired")
 				}
 			}
 		} else {
-			return fmt.Errorf("Token Validation: invalid/expired")
+			return fmt.Errorf("token validation: invalid/expired") // noqa: ST1005
 		}
 
 		return nil
@@ -176,11 +176,21 @@ func init() {
 	authLoginCmd.Flags().StringP("cacert", "c", "", "Path to CA certificate file for HTTPS verification")
 	authLoginCmd.Flags().BoolP("insecure", "i", false, "Skip HTTPS certificate verification (insecure, use with caution)")
 
-	if err := viper.BindPFlag(VIPER_PARAM_SERVER, authLoginCmd.Flags().Lookup("server")); err != nil { log.Fatal(err.Error())}
-	if err := viper.BindPFlag(VIPER_PARAM_USERNAME, authLoginCmd.Flags().Lookup("username")); err != nil { log.Fatal(err.Error())}
-	if err := viper.BindPFlag(VIPER_PARAM_PASSWORD, authLoginCmd.Flags().Lookup("password")); err != nil { log.Fatal(err.Error())}
-	if err := viper.BindPFlag(VIPER_PARAM_CACERT, authLoginCmd.Flags().Lookup("cacert")); err != nil { log.Fatal(err.Error())}
-	if err := viper.BindPFlag(VIPER_PARAM_INSECURE, authLoginCmd.Flags().Lookup("insecure")); err != nil { log.Fatal(err.Error())}
+	if err := viper.BindPFlag(VIPER_PARAM_SERVER, authLoginCmd.Flags().Lookup("server")); err != nil {
+		log.Fatal(err.Error())
+	}
+	if err := viper.BindPFlag(VIPER_PARAM_USERNAME, authLoginCmd.Flags().Lookup("username")); err != nil {
+		log.Fatal(err.Error())
+	}
+	if err := viper.BindPFlag(VIPER_PARAM_PASSWORD, authLoginCmd.Flags().Lookup("password")); err != nil {
+		log.Fatal(err.Error())
+	}
+	if err := viper.BindPFlag(VIPER_PARAM_CACERT, authLoginCmd.Flags().Lookup("cacert")); err != nil {
+		log.Fatal(err.Error())
+	}
+	if err := viper.BindPFlag(VIPER_PARAM_INSECURE, authLoginCmd.Flags().Lookup("insecure")); err != nil {
+		log.Fatal(err.Error())
+	}
 
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authLogoutCmd)
@@ -423,7 +433,7 @@ func validateTokenAgainstServer() (bool, time.Time, error) {
 		return false, time.Time{}, fmt.Errorf("failed to parse token: %w", err)
 	}
 
-	validateURL := viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_AUTHPF_ACTIVATE
+	validateURL := viper.GetString(VIPER_PARAM_SERVER) + ENDPOINT_LOGIN
 
 	responseBody, responseStatusCode, err := sendRequest(validateURL, METHOD_ENDPOINT_AUTHPF_VIEW)
 	if err != nil {
@@ -431,9 +441,10 @@ func validateTokenAgainstServer() (bool, time.Time, error) {
 	}
 
 	// Check HTTP status
-	if responseStatusCode == http.StatusOK {
+	switch responseStatusCode {
+	case http.StatusOK:
 		return true, expiresAt, nil
-	} else if responseStatusCode == http.StatusUnauthorized {
+	case http.StatusUnauthorized:
 		return false, expiresAt, nil
 	}
 
