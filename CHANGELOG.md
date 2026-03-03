@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.3] - 2026-02-06
+## [0.2.3] - 2026-03-03
+
+### Changed
+- Use pkg/config from authpf-api to get in sync with server versions
+- Bump Client API Version to 1.2 (authpf-api server version >= 0.2.3 required)
+- Refactorings
 
 ### Fixed
+- Bugs
 - Manpage
 
 ## [0.2.2] - 2026-02-06
