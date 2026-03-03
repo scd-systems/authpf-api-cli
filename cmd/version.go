@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const API_VERSION = "1.2"
+
 // serverInfo represents the JSON response from GET /info
 type serverInfo struct {
 	Version     string `json:"version"`
@@ -29,16 +31,16 @@ func getServerInfo(config HTTPClientConfig) (*serverInfo, error) {
 	var info serverInfo
 
 	endpoint := strings.TrimRight(viper.GetString(VIPER_PARAM_SERVER), "/") + ENDPOINT_INFO
-	
+
 	response, statusCode, err := sendRequest(endpoint, METHOD_ENDPOINT_INFO)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if statusCode != http.StatusOK {
 		return nil, fmt.Errorf("server version request failed with status %d", statusCode)
 	}
-	
+
 	if err := json.NewDecoder(bytes.NewReader(response)).Decode(&info); err != nil {
 		return nil, fmt.Errorf("failed to decode server info response: %w", err)
 	}

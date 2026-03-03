@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/scd-systems/authpf-api v0.2.3-0.20260303072754-28b2fb0d2f47
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
