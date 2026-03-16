@@ -14,8 +14,8 @@ const API_VERSION = "1.2"
 
 // serverInfo represents the JSON response from GET /info
 type serverInfo struct {
-	Version     string `json:"version"`
-	API_Version string `json:"API"`
+	Version     string `json:"server_version"`
+	API_Version string `json:"api_version"`
 }
 
 // versionInfo represents the version information output
