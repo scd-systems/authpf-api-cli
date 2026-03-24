@@ -28,8 +28,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: authpf-api-${{ matrix.os }}-${{ matrix.arch }}
-          path: build/authpf-api-${{ matrix.os }}-${{ matrix.arch }}
+          name: authpf-api-cli-${{ matrix.os }}-${{ matrix.arch }}
+          path: build/authpf-api-cli-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     needs: build
