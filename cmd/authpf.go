@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -39,8 +41,16 @@ var authpfActivateCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if viper.GetString(VIPER_PARAM_SERVER) == "" || viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
+		if viper.GetString(VIPER_PARAM_SERVER) == "" {
 			return fmt.Errorf("not authenticated. Please login first")
+		}
+
+		// A stored credentials file is enough to log in here, that is what it is for.
+		if viper.GetString(VIPER_PARAM_AUTHPF_TOKEN) == "" {
+			if err := loginWithStoredCredentials(); err != nil {
+				return fmt.Errorf("no token stored and automatic login failed: %w", err)
+			}
+			fmt.Println("✅ Logged in from stored credentials")
 		}
 
 		// Get optional parameters
@@ -101,12 +111,12 @@ var authpfStatusCmd = &cobra.Command{
 			return fmt.Errorf("not authenticated. Please login first")
 		}
 
-		isValid, _, err := validateTokenAgainstServer()
+		validation, err := validateTokenAgainstServer()
 		if err != nil {
-			return fmt.Errorf("token validation: %v", err)
+			return fmt.Errorf("token validation: %w", err)
 		}
-		if !isValid {
-			return fmt.Errorf("token validation: invalid/expired")
+		if !validation.valid {
+			return errors.New("token rejected by server, please run auth login")
 		}
 
 		// Get optional parameters
@@ -145,13 +155,24 @@ var authpfStatusCmd = &cobra.Command{
 			return nil
 		}
 
+		// Anchor expiry is counted on the server clock, never on the client clock. Prefer
+		// the clock the anchor data came with, fall back to the token validation response.
+		serverTime := apiResponse.ServerTime
+		if serverTime.IsZero() {
+			serverTime = validation.serverTime
+		}
+		if serverTime.IsZero() {
+			serverTime = time.Now()
+		}
+		fmt.Fprint(os.Stderr, clockSkewWarning(serverTime))
+
 		// If --all flag is set, display all anchors
 		if all {
 			fmt.Println("✅ AuthPF anchor status: active")
 			fmt.Printf("  Total active anchors: %d\n\n", len(apiResponse.Anchors))
 			for key, status := range apiResponse.Anchors {
 				fmt.Printf("  Anchor: %s\n", key)
-				fmt.Println(formatAuthPFStatusDetailed(status, apiResponse.ServerTime))
+				fmt.Println(formatAuthPFStatusDetailed(status, serverTime))
 			}
 		} else {
 			// Get the first (and usually only) anchor for the user
@@ -167,7 +188,7 @@ var authpfStatusCmd = &cobra.Command{
 				return nil
 			}
 
-			fmt.Println(formatAuthPFStatus(status, apiResponse.ServerTime))
+			fmt.Println(formatAuthPFStatus(status, serverTime))
 		}
 		return nil
 	},
@@ -215,6 +236,16 @@ func activateAuthPFAnchor() error {
 	responseBody, responseStatusCode, err := sendRequest(endpoint, METHOD_ENDPOINT_AUTHPF_ACTIVATE)
 	if err != nil {
 		return err
+	}
+
+	if responseStatusCode == http.StatusUnauthorized {
+		if err := loginWithStoredCredentials(); err != nil {
+			return fmt.Errorf("automatic login failed: %w", err)
+		}
+		responseBody, responseStatusCode, err = sendRequest(endpoint, METHOD_ENDPOINT_AUTHPF_ACTIVATE)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Check status

@@ -45,7 +45,7 @@ Authentication and session management
 
 .PP
 \fBauth login\fP
-  Authenticate with the authpf-api server and obtain a JWT token.
+  Authenticate with the authpf-api server and obtain a JWT token. On success the token validity and its remaining lifetime are displayed. The server, not the client clock, decides validity.
 
 .PP
 \fBOptions:\fP
@@ -75,11 +75,20 @@ Logout from the authpf-api server and remove the stored JWT token.
 .SS auth status
 Display the current authentication status and token information.
 
+.PP
+The server decides whether the token is valid. Token expiry is reported on the server clock, so a client clock that runs ahead or behind never turns a valid token into an expired one. If the two clocks differ by more than two minutes, the CLI prints a time difference warning and names both times.
+
+.PP
+The command exits with 0 only when the server accepts the token. A missing token, a rejected token and an unreachable server all exit with 1, so \fBauth status\fP can be used as a condition in scripts.
+
 .SS authpf
 PF anchor management
 
 .SS authpf activate
 Activate pf rules for the authenticated user.
+
+.PP
+If the config file holds no token but a credentials file with username and password exists, activate logs in first and stores the new token. The server URL must still be configured, a credentials file does not contain it.
 
 .PP
 \fBOptions:\fP
@@ -106,6 +115,9 @@ Deactivate all activated rules (admin only).
 
 .SS authpf status
 Display the status of activated pf rules.
+
+.PP
+The remaining anchor lifetime is calculated on the server clock. A time difference warning is printed whenever client and server clocks differ by more than two minutes.
 
 .PP
 \fBOptions:\fP
