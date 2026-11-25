@@ -40,7 +40,7 @@ The tool provides functionality for:
 Authentication and session management
 
   **auth login**
-  Authenticate with the authpf-api server and obtain a JWT token.
+  Authenticate with the authpf-api server and obtain a JWT token. On success the token validity and its remaining lifetime are displayed.
 
 **Options:**
 
@@ -65,11 +65,17 @@ Logout from the authpf-api server and remove the stored JWT token.
 #### auth status
 Display the current authentication status and token information.
 
+The server decides whether the token is valid. Token expiry is reported on the server clock, so a client clock that runs ahead or behind never turns a valid token into an expired one. If the two clocks differ by more than two minutes, the CLI prints a time difference warning and names both times.
+
+The command exits with 0 only when the server accepts the token. A missing token, a rejected token and an unreachable server all exit with 1, so `auth status` can be used as a condition in scripts.
+
 ### authpf
 PF anchor management
 
 #### authpf activate
 Activate pf rules for the authenticated user.
+
+If the config file holds no token but a credentials file with username and password exists, activate logs in first and stores the new token. The server URL must still be configured, a credentials file does not contain it.
 
 **Options:**
 
@@ -92,6 +98,8 @@ Deactivate pf rules for the authenticated user.
 
 #### authpf status
 Display the status of activated pf rules.
+
+The remaining anchor lifetime is calculated on the server clock. A time difference warning is printed whenever client and server clocks differ by more than two minutes.
 
 **Options:**
 

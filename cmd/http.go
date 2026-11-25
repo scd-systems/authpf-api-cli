@@ -80,10 +80,18 @@ func NewHTTPClientWithTimeout(timeout time.Duration) (*http.Client, error) {
 }
 
 func sendRequest(url string, method string, data ...byte) ([]byte, int, error) {
+	body, statusCode, _, err := sendRequestWithServerTime(url, method, data...)
+	return body, statusCode, err
+}
+
+// sendRequestWithServerTime is sendRequest plus the server's own clock as seen in the
+// Date header of its response. Token and anchor expiry must be measured against that
+// clock, because the client clock is the one thing we cannot assume to be right.
+func sendRequestWithServerTime(url string, method string, data ...byte) ([]byte, int, time.Time, error) {
 	// Create request
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(data))
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create request: %w", err)
+		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
@@ -93,19 +101,37 @@ func sendRequest(url string, method string, data ...byte) ([]byte, int, error) {
 	// Send request
 	client, err := NewHTTPClientWithDefaults()
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to create HTTP client: %w", err)
+		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to send request: %w", err)
+		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to read response: %w", err)
+		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return body, resp.StatusCode, nil
+	return body, resp.StatusCode, responseServerTime(resp), nil
+}
+
+// responseServerTime reads the server clock from a response, or the zero time when the
+// server sent no usable Date header.
+func responseServerTime(resp *http.Response) time.Time {
+	// shortcut: the HTTP Date header has 1 second resolution and ignores the request
+	// round trip, both far below the tolerance clock skew is reported at.
+	raw := resp.Header.Get("Date")
+	if raw == "" {
+		return time.Time{}
+	}
+
+	serverTime, err := http.ParseTime(raw)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return serverTime.UTC()
 }

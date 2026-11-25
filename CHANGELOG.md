@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-xx
+
+## Added
+- Simplify authpf activation in case of no/out-dated token but credentials exists.
+So `authpf activate` logs in from the credentials file when the config file holds no token, then continues with the activation. No additional 
+
+## Fixed
+- `auth status` no longer reports `token status: expired` when the server accepts the token but the client clock is ahead or behind
+- A token that cannot be parsed locally no longer aborts `auth status` before the server was asked
+- `authpf status` no longer calculates a meaningless remaining lifetime when the server sends no `server_time`
+
+## Changed
+- Token validity is decided by the server alone. Expiry in `auth login` and `auth status` is calculated on the server clock (HTTP `Date` header), anchor expiry in `authpf status` on `server_time`
+- `auth login`, `auth status` and `authpf status` print a time difference warning naming both clocks when client and server differ by more than two minutes
+- `auth login` now shows the token validity and its remaining lifetime
+- A token the server rejects now reports `token rejected by server, please run auth login`
+- `auth status` now exits with 1 when no token is stored, instead of printing `Authentication Status: ❌ Not authenticated` and exiting with 0. The message is now `not authenticated, please run auth login`, so scripts that matched the old text need adjustment
+
+
 ## [0.3.1] - 2026-03-24
 
 ### ⚠️ Breaking Changes
