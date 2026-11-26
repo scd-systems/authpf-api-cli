@@ -21,6 +21,12 @@ type HTTPClientConfig struct {
 	UseHTTPS   bool
 }
 
+// maxResponseBytes bounds how much of a response the client buffers. An endpoint the user
+// does not trust must not be able to drive the client's memory or flood the terminal with
+// a body. 8 MB is about four times what a 10000 anchor list needs, raise it here if a
+// gateway ever outgrows that.
+const maxResponseBytes = 8 << 20
+
 func getURLScheme(serverAddr string) string {
 	parsedURL, err := url.Parse(serverAddr)
 	if err != nil {
@@ -107,13 +113,17 @@ func sendRequestWithServerTime(url string, method string, data ...byte) ([]byte,
 	if err != nil {
 		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to send request: %w", err)
 	}
-	// body is read below and fully consumed: a close error cannot reach the caller
+	// body is read below: a close error cannot reach the caller
 	defer func() { _ = resp.Body.Close() }()
 
-	// Read response
-	body, err := io.ReadAll(resp.Body)
+	// Read response, one byte past the limit to tell a full body from a truncated one
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
 		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to read response: %w", err)
+	}
+	if len(body) > maxResponseBytes {
+		return nil, http.StatusInternalServerError, time.Time{},
+			fmt.Errorf("response exceeds the %d MB limit", maxResponseBytes>>20)
 	}
 
 	return body, resp.StatusCode, responseServerTime(resp), nil

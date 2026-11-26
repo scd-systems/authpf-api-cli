@@ -162,7 +162,13 @@ var authTokenCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Current Token: %s....\n", token[:10])
+		// shortcut: a server may hand out a token shorter than the 10 characters shown,
+		// and JWTs are ASCII, so a byte cut here can only ever land on a placeholder.
+		shown := token
+		if len(shown) > 10 {
+			shown = shown[:10]
+		}
+		fmt.Printf("Current Token: %s....\n", sanitizeDisplay(shown))
 		return nil
 	},
 }

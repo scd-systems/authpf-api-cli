@@ -28,6 +28,26 @@ type AuthPFAnchorsResponse struct {
 	ServerTime time.Time                `json:"server_time"`
 }
 
+// sanitize strips terminal control characters from everything in this response that the
+// server chose, the anchor fields and the anchor keys alike. This runs at the boundary
+// where server data becomes program data, so no renderer has to remember it; a new string
+// field on AuthPFStatus has to be added here.
+func (r *AuthPFAnchorsResponse) sanitize() {
+	if r.Anchors == nil {
+		return
+	}
+	anchors := make(map[string]*AuthPFStatus, len(r.Anchors))
+	for key, status := range r.Anchors {
+		if status != nil {
+			status.Username = sanitizeDisplay(status.Username)
+			status.UserIP = sanitizeDisplay(status.UserIP)
+			status.Timeout = sanitizeDisplay(status.Timeout)
+		}
+		anchors[sanitizeDisplay(key)] = status
+	}
+	r.Anchors = anchors
+}
+
 var authpfCmd = &cobra.Command{
 	Use:   "authpf",
 	Short: "Manage authpf anchors [client only]",
@@ -168,16 +188,37 @@ var authpfStatusCmd = &cobra.Command{
 
 		// If --all flag is set, display all anchors
 		if all {
+			// A null entry in the response unmarshals to nil: it is not a working anchor
+			// and must not be counted or dereferenced.
+			active := 0
+			for _, status := range apiResponse.Anchors {
+				if status != nil {
+					active++
+				}
+			}
+			if active == 0 {
+				fmt.Println("❌ AuthPF anchor status: inactive")
+				fmt.Println("  No active anchor found")
+				return nil
+			}
+
 			fmt.Println("✅ AuthPF anchor status: active")
-			fmt.Printf("  Total active anchors: %d\n\n", len(apiResponse.Anchors))
+			fmt.Printf("  Total active anchors: %d\n\n", active)
 			for key, status := range apiResponse.Anchors {
 				fmt.Printf("  Anchor: %s\n", key)
+				if status == nil {
+					fmt.Println("    (no status reported for this anchor)")
+					continue
+				}
 				fmt.Println(formatAuthPFStatusDetailed(status, serverTime))
 			}
 		} else {
 			// Get the first (and usually only) anchor for the user
 			var status *AuthPFStatus
 			for _, anchor := range apiResponse.Anchors {
+				if anchor == nil {
+					continue
+				}
 				status = anchor
 				break
 			}
@@ -324,6 +365,7 @@ func getAuthPFAnchorStatus(all bool) (interface{}, error) {
 	if err := json.Unmarshal(responseBody, &apiResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
+	apiResponse.sanitize()
 
 	// Return the response with server time for client-side calculations
 	return &apiResponse, nil

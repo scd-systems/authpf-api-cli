@@ -33,6 +33,9 @@ var rootCmd = &cobra.Command{
 It can be used both on the server (for user and pf anchor management)
 and on the client (for authentication and anchor loading).`,
 	Version: version,
+	// main.go reports every command error, so cobra must not print it as well. This also
+	// makes that one report the only place where error text reaches the terminal.
+	SilenceErrors: true,
 }
 
 func Execute(ver string) error {
