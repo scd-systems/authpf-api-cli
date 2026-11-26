@@ -297,6 +297,22 @@ func performLogin() (string, time.Time, error) {
 	return token, serverTime, nil
 }
 
+// secretFileMode is the only mode a file that holds a bearer token or a password may have.
+const secretFileMode os.FileMode = 0600
+
+// enforceSecretFileMode narrows an already written secret file back to its owner.
+// The modes passed to os.WriteFile and viper's WriteConfigAs only apply when the file is
+// created, so a config.yaml or credentials.yaml that already exists - from an older release,
+// a home restore or a hand-made file - keeps its group- or world-readable mode through every
+// later login, and the token in it can be read and replayed by any local user.
+func enforceSecretFileMode(path string) error {
+	if err := os.Chmod(path, secretFileMode); err != nil {
+		return fmt.Errorf("failed to set permissions on %s: %w", path, err)
+	}
+
+	return nil
+}
+
 // saveAuthToken saves the authentication token and auth settings to the config file
 func saveAuthToken() error {
 	home, err := os.UserHomeDir()
@@ -321,12 +337,17 @@ func saveAuthToken() error {
 	}
 
 	save := viper.New()
+	save.SetConfigPermissions(secretFileMode)
 	save.Set("api.server", viper.GetString(VIPER_PARAM_SERVER))
 	save.Set("api.token", viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 	save.Set("api.cacert", viper.GetString(VIPER_PARAM_CACERT))
 	save.Set("api.insecure", viper.GetBool(VIPER_PARAM_INSECURE))
 
 	if err := save.WriteConfigAs(configFile); err != nil {
+		return err
+	}
+
+	if err := enforceSecretFileMode(configFile); err != nil {
 		return err
 	}
 
@@ -343,7 +364,15 @@ func clearAuthToken() error {
 	configDir := filepath.Join(home, CONFIG_DIR)
 	configFile := filepath.Join(configDir, CONFIG_FILE)
 
-	if err := viper.New().WriteConfigAs(configFile); err != nil {
+	// The cleared file holds no secret, but the next login writes its token into the same file,
+	// so keep that file owner-only here too.
+	save := viper.New()
+	save.SetConfigPermissions(secretFileMode)
+	if err := save.WriteConfigAs(configFile); err != nil {
+		return err
+	}
+
+	if err := enforceSecretFileMode(configFile); err != nil {
 		return err
 	}
 
@@ -453,8 +482,12 @@ func saveCredentialsToFile(username, password string) error {
 	}
 
 	// Write file with 0600 permissions
-	if err := os.WriteFile(credentialsFile, data, 0600); err != nil {
+	if err := os.WriteFile(credentialsFile, data, secretFileMode); err != nil {
 		return fmt.Errorf("failed to write credentials file: %w", err)
+	}
+
+	if err := enforceSecretFileMode(credentialsFile); err != nil {
+		return err
 	}
 
 	return nil
