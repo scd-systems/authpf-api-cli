@@ -266,6 +266,10 @@ func init() {
 
 // Helper functions
 func loadConfig(configPath string) (*config.ConfigFile, error) {
+	if err := checkConfigTarget(configPath); err != nil {
+		return nil, err
+	}
+
 	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -282,6 +286,10 @@ func loadConfig(configPath string) (*config.ConfigFile, error) {
 
 func saveConfig(configPath string, config *config.ConfigFile) error {
 	// Read the entire file to preserve other sections
+	if err := checkConfigTarget(configPath); err != nil {
+		return err
+	}
+
 	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {
 		return err

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	config "github.com/scd-systems/authpf-api/pkg/config"
@@ -535,5 +536,22 @@ func TestConfigPathHandling(t *testing.T) {
 	// Verify file was written
 	if _, err := os.Stat(configPath); err != nil {
 		t.Errorf("config file not found after save: %v", err)
+	}
+
+	// An arbitrary destination is operator functionality, which is why nothing here contains
+	// paths. The same path as a planted symlink is a different file, and that one is refused.
+	otherPath := filepath.Join(t.TempDir(), "elsewhere.conf")
+	if err := os.WriteFile(otherPath, []byte(content), 0600); err != nil {
+		t.Fatalf("failed to write the link target: %v", err)
+	}
+	link := configPath + ".link"
+	if err := os.Symlink(otherPath, link); err != nil {
+		t.Fatalf("failed to plant a symlink: %v", err)
+	}
+	if _, err := loadConfig(link); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("loadConfig() on a symlink = %v, want it refused as a symlink", err)
+	}
+	if err := saveConfig(link, cfg); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("saveConfig() on a symlink = %v, want it refused as a symlink", err)
 	}
 }
