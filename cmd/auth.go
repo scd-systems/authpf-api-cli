@@ -91,8 +91,9 @@ var authLoginCmd = &cobra.Command{
 		// Save credentials to credentials file if provided via flags
 		if viper.GetString(VIPER_PARAM_USERNAME) != "" && viper.GetString(VIPER_PARAM_PASSWORD) != "" {
 			if err := saveCredentialsToFile(viper.GetString(VIPER_PARAM_USERNAME), viper.GetString(VIPER_PARAM_PASSWORD)); err != nil {
-				// Don't fail the login if credentials file save fails
-				fmt.Fprintf(cmd.OutOrStderr(), "⚠️ Warning: failed to save credentials file: %v\n", err)
+				// Don't fail the login if credentials file save fails.
+				// Stderr is the reporting channel itself, so there is nowhere to report a write error.
+				_, _ = fmt.Fprintf(cmd.OutOrStderr(), "⚠️ Warning: failed to save credentials file: %v\n", err)
 			} else {
 				fmt.Println("✅ Credentials saved to credentials file")
 			}

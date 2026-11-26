@@ -107,7 +107,8 @@ func sendRequestWithServerTime(url string, method string, data ...byte) ([]byte,
 	if err != nil {
 		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	// body is read below and fully consumed: a close error cannot reach the caller
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)

@@ -59,21 +59,15 @@ func TestLoadConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary file
-			tmpFile, err := os.CreateTemp("", "config-*.yaml")
-			if err != nil {
-				t.Fatalf("failed to create temp file: %v", err)
-			}
-			defer os.Remove(tmpFile.Name())
+			configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 			// Write test content
-			if _, err := tmpFile.WriteString(tt.content); err != nil {
+			if err := os.WriteFile(configPath, []byte(tt.content), 0600); err != nil {
 				t.Fatalf("failed to write to temp file: %v", err)
 			}
-			tmpFile.Close()
 
 			// Test loadConfig
-			config, err := loadConfig(tmpFile.Name())
+			config, err := loadConfig(configPath)
 			if (err != nil) != tt.wantError {
 				t.Errorf("loadConfig() error = %v, wantError %v", err, tt.wantError)
 				return
@@ -190,31 +184,25 @@ func TestSaveConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary file with initial content
-			tmpFile, err := os.CreateTemp("", "config-*.yaml")
-			if err != nil {
-				t.Fatalf("failed to create temp file: %v", err)
-			}
-			defer os.Remove(tmpFile.Name())
+			configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 			// Write initial YAML structure
 			initialContent := `rbac:
   roles: {}
   users: {}`
-			if _, err := tmpFile.WriteString(initialContent); err != nil {
+			if err := os.WriteFile(configPath, []byte(initialContent), 0600); err != nil {
 				t.Fatalf("failed to write initial content: %v", err)
 			}
-			tmpFile.Close()
 
 			// Test saveConfig
-			err = saveConfig(tmpFile.Name(), tt.config)
+			err := saveConfig(configPath, tt.config)
 			if (err != nil) != tt.wantError {
 				t.Errorf("saveConfig() error = %v, wantError %v", err, tt.wantError)
 				return
 			}
 
 			if err == nil && tt.validate != nil {
-				if !tt.validate(tmpFile.Name()) {
+				if !tt.validate(configPath) {
 					t.Errorf("saveConfig() validation failed")
 				}
 			}
@@ -294,12 +282,7 @@ func TestConfigFileStructures(t *testing.T) {
 
 // TestLoadAndSaveRoundTrip tests loading and saving config preserves data
 func TestLoadAndSaveRoundTrip(t *testing.T) {
-	// Create temporary file
-	tmpFile, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 	// Write initial config
 	initialContent := `rbac:
@@ -320,13 +303,12 @@ func TestLoadAndSaveRoundTrip(t *testing.T) {
       password: bobhash
       role: user`
 
-	if _, err := tmpFile.WriteString(initialContent); err != nil {
+	if err := os.WriteFile(configPath, []byte(initialContent), 0600); err != nil {
 		t.Fatalf("failed to write initial content: %v", err)
 	}
-	tmpFile.Close()
 
 	// Load config
-	cfg, err := loadConfig(tmpFile.Name())
+	cfg, err := loadConfig(configPath)
 	if err != nil {
 		t.Fatalf("loadConfig() failed: %v", err)
 	}
@@ -339,13 +321,13 @@ func TestLoadAndSaveRoundTrip(t *testing.T) {
 	}
 
 	// Save config
-	err = saveConfig(tmpFile.Name(), cfg)
+	err = saveConfig(configPath, cfg)
 	if err != nil {
 		t.Fatalf("saveConfig() failed: %v", err)
 	}
 
 	// Load again and verify
-	config2, err := loadConfig(tmpFile.Name())
+	config2, err := loadConfig(configPath)
 	if err != nil {
 		t.Fatalf("second loadConfig() failed: %v", err)
 	}
@@ -366,23 +348,18 @@ func TestLoadAndSaveRoundTrip(t *testing.T) {
 
 // TestEmptyUsersMap tests handling of empty users map
 func TestEmptyUsersMap(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 	// Write config with empty users
 	content := `rbac:
   roles: {}
   users: {}`
 
-	if _, err := tmpFile.WriteString(content); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
 		t.Fatalf("failed to write content: %v", err)
 	}
-	tmpFile.Close()
 
-	cfg, err := loadConfig(tmpFile.Name())
+	cfg, err := loadConfig(configPath)
 	if err != nil {
 		t.Fatalf("loadConfig() failed: %v", err)
 	}
@@ -397,13 +374,13 @@ func TestEmptyUsersMap(t *testing.T) {
 		Role:     "user",
 	}
 
-	err = saveConfig(tmpFile.Name(), cfg)
+	err = saveConfig(configPath, cfg)
 	if err != nil {
 		t.Fatalf("saveConfig() failed: %v", err)
 	}
 
 	// Verify
-	config2, err := loadConfig(tmpFile.Name())
+	config2, err := loadConfig(configPath)
 	if err != nil {
 		t.Fatalf("second loadConfig() failed: %v", err)
 	}
@@ -445,22 +422,17 @@ func TestYAMLUnmarshalWithOmitEmpty(t *testing.T) {
 
 // TestMultipleUsersHandling tests handling multiple users
 func TestMultipleUsersHandling(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 	content := `rbac:
   roles: {}
   users: {}`
 
-	if _, err := tmpFile.WriteString(content); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
 		t.Fatalf("failed to write content: %v", err)
 	}
-	tmpFile.Close()
 
-	cfg, err := loadConfig(tmpFile.Name())
+	cfg, err := loadConfig(configPath)
 	if err != nil {
 		t.Fatalf("loadConfig() failed: %v", err)
 	}
@@ -490,13 +462,13 @@ func TestMultipleUsersHandling(t *testing.T) {
 		}
 	}
 
-	err = saveConfig(tmpFile.Name(), cfg)
+	err = saveConfig(configPath, cfg)
 	if err != nil {
 		t.Fatalf("saveConfig() failed: %v", err)
 	}
 
 	// Load and verify
-	config2, err := loadConfig(tmpFile.Name())
+	config2, err := loadConfig(configPath)
 	if err != nil {
 		t.Fatalf("second loadConfig() failed: %v", err)
 	}
@@ -528,14 +500,7 @@ func TestMultipleUsersHandling(t *testing.T) {
 
 // TestConfigPathHandling tests different config path scenarios
 func TestConfigPathHandling(t *testing.T) {
-	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "config-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	configPath := filepath.Join(tmpDir, "authpf-api.conf")
+	configPath := filepath.Join(t.TempDir(), "authpf-api.conf")
 
 	// Create initial config file
 	content := `rbac:
