@@ -16,15 +16,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.25.5'
-      
+          go-version: '1.27.4'
+
       - name: Build ${{ matrix.os }}-${{ matrix.arch }}
         run: |
           make build GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }}
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -40,10 +40,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-      
+
       - name: Generate Checksums
         run: |
           mkdir -p release
@@ -55,7 +55,7 @@ jobs:
               fi
             done
           done
-      
+
       - name: Extract Release Notes from CHANGELOG
         id: changelog
         run: |
@@ -66,13 +66,13 @@ jobs:
           /^## \[/d
           p
           }" CHANGELOG.md > RELEASE_NOTES.md
-          
+
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "## Release ${VERSION}" > RELEASE_NOTES.md
             echo "" >> RELEASE_NOTES.md
             echo "See [Changelog](https://github.com/scd-systems/authpf-api/blob/${VERSION}/CHANGELOG.md) for details" >> RELEASE_NOTES.md
           fi
-          
+
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           cat RELEASE_NOTES.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
