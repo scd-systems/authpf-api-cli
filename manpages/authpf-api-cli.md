@@ -50,8 +50,8 @@ Authentication and session management
 **--username** *USERNAME*
 : Username for authentication. Required for first login.
 
-**--password** *PASSWORD*
-: Password for authentication. Required for first login. If not provided, will prompt interactively.
+**--password**, **-p**
+: Ask for the password at the terminal, hidden. A password is never given as a value on the command line: a value there sits in the process argument vector, which every user logged in on that host can read while the process runs, and it stays in the shell history and in the CI job log too. Without **-p** the credential comes from **AUTHPF_API_PASSWORD**, then from the config file, then from the credentials file of the last login.
 
 **--cacert** *FILE*, **-c** *FILE*
 : Path to a custom CA certificate file for HTTPS connections with self-signed certificates.
@@ -166,7 +166,7 @@ Display the current server configuration.
 : Username for authentication. Overrides the configured username.
 
 **AUTHPF_API_PASSWORD**
-: Password for authentication. Overrides the configured password.
+: The credential sent for authentication, overriding the configured and the stored one. The server compares what arrives against the stored hash, so for the usual `bcrypt` hash in the server config (the `$2a$…` form) this has to be the **SHA-256 hex digest of the password**, not the password itself: `printf %s "$pw" | sha256sum`. The same rule applies to `api.password` in the config file and to `credentials.yaml`; **-p** on **auth login** is the path that takes the password as typed and hashes it itself. An environment variable is readable by its owning user and root only, which a command line value is not, but an inline `AUTHPF_API_PASSWORD=… authpf-api-cli` still lands in the shell history and shows up in `docker inspect`.
 
 **AUTHPF_API_TOKEN**
 : JWT token for authentication. Overrides the stored token.
@@ -204,8 +204,8 @@ api:
 ## EXAMPLES
 
 **Login to API and get Token**
-: authpf-api-cli auth login --server https://api.example.com --username john --password mypassword
-: authpf-api-cli auth login --server https://api.example.com --username john --password mypassword -c ca-root.crt
+: authpf-api-cli auth login --server https://api.example.com --username john -p
+: authpf-api-cli auth login --server https://api.example.com --username john -p -c ca-root.crt
 
 **Logout from API**
 : authpf-api-cli auth logout
@@ -248,7 +248,7 @@ api:
 
 ```bash
 # Step 1: Login to the server (only required for first time)
-authpf-api-cli auth login --server https://api.example.com --username alice --password pass123
+authpf-api-cli auth login --server https://api.example.com --username alice -p
 
 # To get a new token (if already configured server and username/password)
 authpf-api-cli auth login
@@ -295,7 +295,7 @@ authpf-api-cli config show
 
 ```bash
 # Login with custom CA certificate
-authpf-api-cli auth login --server https://api.example.com --username john --password pass -c /path/to/ca.crt
+authpf-api-cli auth login --server https://api.example.com --username john -p -c /path/to/ca.crt
 
 # Activate anchor for 2 hours
 authpf-api-cli authpf activate -t 2h
@@ -310,7 +310,7 @@ authpf-api-cli authpf status --all
 authpf-api-cli authpf deactivate --all
 
 # Verbose output for debugging
-authpf-api-cli --verbose auth login --server https://api.example.com --username john --password pass
+authpf-api-cli --verbose auth login --server https://api.example.com --username john -p
 ```
 
 ## FILES

@@ -39,7 +39,10 @@ cli() {
 # run NAME WANT_CODE CONFIGFILE TOKEN ARGS...
 run() {
   name=$1; want=$2; cfg=$3; tok=$4; shift 4
-  out=$(cli "$cfg" "$tok" "$@" 2>&1) && got=0 || got=$?
+  # stdin comes from /dev/null, never from the terminal running the suite: a command that
+  # wants typing has to refuse that situation out loud, and a command that hangs on it has
+  # to fail this case instead of holding the whole suite until TIMEOUT.
+  out=$(cli "$cfg" "$tok" "$@" </dev/null 2>&1) && got=0 || got=$?
   fails_here=0
   printf '  %-56s exit %s' "$name" "$got"
   [ "$got" = "$want" ] || fail "wanted exit code $want"

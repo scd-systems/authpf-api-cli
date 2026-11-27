@@ -143,6 +143,22 @@ done
 home=$home_saved
 done_case
 
+# -p asks for the password at the terminal, so the secret never sits in the process argument
+# vector, where every user logged in would read it out of /proc/<pid>/cmdline. Two things
+# follow that are reachable without a terminal in front of the test run: a stdin nobody can
+# type into has to be refused instead of waited for, and a password still given as a value
+# has to be refused without being printed back into the terminal or the CI log.
+run "auth login -p refuses a stdin nobody can type into" 1 "$config" "" auth login -p
+check_has "AUTHPF_API_PASSWORD"
+check_no_panic
+done_case
+
+run "auth login -p with a password next to it is refused" 1 "$config" "" auth login -p 'Passw0rd_1'
+check_has "takes no arguments"
+check_lacks "Passw0rd_1"
+check_no_panic
+done_case
+
 # -c/--config-path says which server config to edit, so what the tool accepts there
 # is all that stands between the command and somebody else's file. Everything below runs
 # unprivileged in a scratch directory: an arbitrary destination is legitimate operator work and
