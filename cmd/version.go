@@ -3,14 +3,23 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
 
 const API_VERSION = "1.2"
+
+// versionProbeTimeout bounds how long --version waits for the server. The CLI version is
+// worth showing on its own, so a server that is slow or down may cost a line of output and
+// not half a minute of standing in front of a terminal. Every other command keeps the
+// configured 30 seconds.
+const versionProbeTimeout = time.Second
 
 // serverInfo represents the JSON response from GET /info
 type serverInfo struct {
@@ -24,15 +33,18 @@ type versionInfo struct {
 	APIVersion       string `json:"client_supported_api"`
 	ServerVersion    string `json:"server_version,omitempty"`
 	ServerAPIVersion string `json:"server_api_version,omitempty"`
+	// ServerNote says why the two server fields are missing. Only one of the two is ever set.
+	ServerNote string `json:"server_note,omitempty"`
 }
 
-// getServerVersion fetches the version string from the server's /info endpoint.
+// getServerInfo asks the server's /info endpoint what it is. How long to wait for an answer
+// is the caller's decision, carried in config.
 func getServerInfo(config HTTPClientConfig) (*serverInfo, error) {
 	var info serverInfo
 
 	endpoint := strings.TrimRight(viper.GetString(VIPER_PARAM_SERVER), "/") + ENDPOINT_INFO
 
-	response, statusCode, err := sendRequest(endpoint, METHOD_ENDPOINT_INFO)
+	response, statusCode, err := sendRequestWithConfig(config, endpoint, METHOD_ENDPOINT_INFO)
 	if err != nil {
 		return nil, err
 	}
@@ -92,16 +104,21 @@ func checkAPIVersionCompatibility() error {
 }
 
 // DisplayVersionInfo displays version information in JSON format.
-// It includes the CLI version and API version.
+// It includes the CLI version and API version, plus the server's own versions when the
+// server answers within versionProbeTimeout.
 func DisplayVersionInfo(cliVersion string) error {
 	info := versionInfo{
 		CLIVersion: cliVersion,
 		APIVersion: API_VERSION,
 	}
 
-	// Try to fetch server information, but silently ignore errors
-	serverInfo, err := getServerInfo(DefaultHTTPConfig())
-	if err == nil {
+	probe := DefaultHTTPConfig()
+	probe.Timeout = versionProbeTimeout
+
+	serverInfo, err := getServerInfo(probe)
+	if err != nil {
+		info.ServerNote = serverProbeNote(err)
+	} else {
 		info.ServerVersion = serverInfo.Version
 		info.ServerAPIVersion = serverInfo.API_Version
 	}
@@ -114,4 +131,22 @@ func DisplayVersionInfo(cliVersion string) error {
 
 	fmt.Println(string(jsonData))
 	return nil
+}
+
+// serverProbeNote turns a failed /info request into the one line the version output can
+// carry. A timeout gets that wording because it is the case the caller waited for; anything
+// else is reported as unreachable, with the reason filtered the way every string that came
+// from a server is filtered on its way to the terminal.
+func serverProbeNote(err error) string {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return fmt.Sprintf("server took longer than %s to answer, version information not fetched", versionProbeTimeout)
+	}
+
+	msg := sanitizeDisplay(err.Error())
+	if r := []rune(msg); len(r) > maxReportedErrorChars {
+		msg = string(r[:maxReportedErrorChars]) + " …"
+	}
+
+	return fmt.Sprintf("server not reachable, version information not fetched: %s", msg)
 }
