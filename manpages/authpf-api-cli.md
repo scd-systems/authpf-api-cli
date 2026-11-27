@@ -32,7 +32,7 @@ The tool provides functionality for:
 :   Display help information and exit.
 
 **--version**
-:   Display version information and exit.
+:   Display version information and exit. The configured server is asked for its version as well and gets one second to answer: a server that is slow or unreachable costs a `server_note` in the output instead of a wait, and the command still exits 0.
 
 ## COMMANDS
 
@@ -109,6 +109,8 @@ The remaining anchor lifetime is calculated on the server clock. A time differen
 
 ### user
 User management (server-side)
+
+Every command below that changes the server configuration checks the result against the rules the authpf-api server enforces on its `rbac.users` section, and refuses to write when the server would refuse to start from the file: a user name outside `[a-zA-Z0-9_-]` or longer than 255 characters, a role the configuration does not define, a `userId` that is negative or that another user already uses, or the removal of the last remaining user. A refused change leaves the file untouched.
 
 #### user create
 Create a new user on the authpf-api server.

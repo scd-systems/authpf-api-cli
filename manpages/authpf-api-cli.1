@@ -37,7 +37,7 @@ Display help information and exit.
 
 .TP
 \fB--version\fP
-Display version information and exit.
+Display version information and exit. The configured server is asked for its version as well and gets one second to answer: a server that is slow or unreachable costs a \fBserver_note\fP in the output instead of a wait, and the command still exits 0.
 
 .SH COMMANDS
 .SS auth
@@ -127,6 +127,9 @@ Display status of all activated rules (admin only).
 
 .SS user
 User management (server-side)
+
+.PP
+Every command below that changes the server configuration checks the result against the rules the authpf-api server enforces on its \fIrbac.users\fP section, and refuses to write when the server would refuse to start from the file: a user name outside \fI[a-zA-Z0-9_-]\fP or longer than 255 characters, a role the configuration does not define, a \fIuserId\fP that is negative or that another user already uses, or the removal of the last remaining user. A refused change leaves the file untouched.
 
 .SS user create
 Create a new user on the authpf-api server.
