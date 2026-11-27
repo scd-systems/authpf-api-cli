@@ -42,18 +42,40 @@ func Execute(ver string) error {
 	version = ver
 	rootCmd.Version = ver
 
-	// Check for --version or -V flag before Cobra processes it
-	for _, arg := range os.Args[1:] {
-		if arg == "--version" || arg == "-V" {
-			initConfig()
-			if err := DisplayVersionInfo(ver); err != nil {
-				return err
-			}
-			os.Exit(0)
+	// Answer --version before Cobra sees it, but take the configuration out of the arguments
+	// first: Cobra has parsed nothing at this point, so without this a
+	// `--config other.yaml --version` would ask the server of the default file instead of
+	// the one the user named.
+	if wanted, configPath := versionRequested(os.Args[1:]); wanted {
+		cfgFile = configPath
+		initConfig()
+		if err := DisplayVersionInfo(ver); err != nil {
+			return err
 		}
+		os.Exit(0)
 	}
 
 	return rootCmd.Execute()
+}
+
+// versionRequested reads the two arguments the version answer depends on, each of which can
+// be written in two forms.
+func versionRequested(args []string) (bool, string) {
+	wanted := false
+	configPath := ""
+
+	for i, arg := range args {
+		switch {
+		case arg == "--version" || arg == "-V":
+			wanted = true
+		case arg == "--config" && i+1 < len(args):
+			configPath = args[i+1]
+		case strings.HasPrefix(arg, "--config="):
+			configPath = strings.TrimPrefix(arg, "--config=")
+		}
+	}
+
+	return wanted, configPath
 }
 
 func init() {

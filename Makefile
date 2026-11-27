@@ -1,4 +1,4 @@
-.PHONY: help build test clean lint fmt vet coverage build-all build-freebsd build-openbsd
+.PHONY: help build test test-e2e test-e2e-remote clean lint fmt vet coverage build-all build-freebsd build-openbsd
 
 # Variables
 APP_NAME := authpf-api-cli
@@ -33,6 +33,8 @@ help:
 	@echo ""
 	@echo "  make test              Run all tests"
 	@echo "  make test-verbose      Run tests with verbose output"
+	@echo "  make test-e2e          Run the shell end-to-end suite (needs python3)"
+	@echo "  make test-e2e-remote   Run the shell suite against a real server (tests/remote.env)"
 	@echo "  make coverage          Run tests with coverage report"
 	@echo "  make coverage-html     Generate HTML coverage report"
 	@echo ""
@@ -107,6 +109,18 @@ test-verbose:
 	@echo "Running tests (verbose)..."
 	@$(GO) test -v -race -count=1 ./...
 	@echo "✓ Tests passed"
+
+# The CLI as a subprocess against tests/mock_server.py; see the header of tests/e2e.sh
+test-e2e:
+	@echo "Running end-to-end tests..."
+	@sh tests/e2e.sh
+	@echo "✓ End-to-end tests passed"
+
+# Needs tests/remote.env; see tests/remote.env.example. Read only unless gated there.
+test-e2e-remote:
+	@echo "Running end-to-end tests against the configured server..."
+	@sh tests/e2e_remote.sh
+	@echo "✓ End-to-end tests passed"
 
 # Run tests with coverage
 coverage:

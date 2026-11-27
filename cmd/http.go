@@ -24,7 +24,7 @@ type HTTPClientConfig struct {
 // maxResponseBytes bounds how much of a response the client buffers. An endpoint the user
 // does not trust must not be able to drive the client's memory or flood the terminal with
 // a body. 8 MB is about four times what a 10000 anchor list needs, raise it here if a
-// gateway ever outgrows that.
+// server ever outgrows that.
 const maxResponseBytes = 8 << 20
 
 func getURLScheme(serverAddr string) string {
@@ -75,10 +75,6 @@ func NewHTTPClient(config HTTPClientConfig) (*http.Client, error) {
 	return client, nil
 }
 
-func NewHTTPClientWithDefaults() (*http.Client, error) {
-	return NewHTTPClient(DefaultHTTPConfig())
-}
-
 func NewHTTPClientWithTimeout(timeout time.Duration) (*http.Client, error) {
 	config := DefaultHTTPConfig()
 	config.Timeout = timeout
@@ -90,10 +86,28 @@ func sendRequest(url string, method string, data ...byte) ([]byte, int, error) {
 	return body, statusCode, err
 }
 
-// sendRequestWithServerTime is sendRequest plus the server's own clock as seen in the
+// sendRequestWithConfig is sendRequest with an explicit HTTP configuration, for the caller
+// that cannot afford the default timeout.
+func sendRequestWithConfig(config HTTPClientConfig, url string, method string, data ...byte) ([]byte, int, error) {
+	body, statusCode, _, err := sendRequestWithServerTimeConfig(config, url, method, data...)
+	return body, statusCode, err
+}
+
+// sendRequestWithServerTime is sendRequestWithServerTimeConfig with DefaultHTTPConfig, so the
+// 30 seconds of that configuration.
+func sendRequestWithServerTime(url string, method string, data ...byte) ([]byte, int, time.Time, error) {
+	return sendRequestWithServerTimeConfig(DefaultHTTPConfig(), url, method, data...)
+}
+
+// sendRequestWithServerTimeConfig is sendRequest plus the server's own clock as seen in the
 // Date header of its response. Token and anchor expiry must be measured against that
 // clock, because the client clock is the one thing we cannot assume to be right.
-func sendRequestWithServerTime(url string, method string, data ...byte) ([]byte, int, time.Time, error) {
+func sendRequestWithServerTimeConfig(
+	config HTTPClientConfig,
+	url string,
+	method string,
+	data ...byte,
+) ([]byte, int, time.Time, error) {
 	// Create request
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(data))
 	if err != nil {
@@ -105,7 +119,7 @@ func sendRequestWithServerTime(url string, method string, data ...byte) ([]byte,
 	req.Header.Set("Authorization", "Bearer "+viper.GetString(VIPER_PARAM_AUTHPF_TOKEN))
 
 	// Send request
-	client, err := NewHTTPClientWithDefaults()
+	client, err := NewHTTPClient(config)
 	if err != nil {
 		return nil, http.StatusInternalServerError, time.Time{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

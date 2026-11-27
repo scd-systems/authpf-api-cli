@@ -89,7 +89,7 @@ func TestSanitizeDisplay(t *testing.T) {
 		// Also not control characters, but they still rearrange or hide what is read.
 		{name: "rtl override", in: "a\u202eb", want: "a␣b"},
 		{name: "zero width space", in: "ro\u200bot", want: "ro␣ot"},
-		// Values a real gateway sends must come out byte for byte the same.
+		// Values a real server sends must come out byte for byte the same.
 		{name: "ascii user and ipv4", in: "Fritz_9-Walter 10.0.0.42 2001:db8::42 8h", want: "Fritz_9-Walter 10.0.0.42 2001:db8::42 8h"},
 		{name: "umlauts and symbols", in: "Äöüß → · ␣", want: "Äöüß → · ␣"},
 		{name: "empty", in: "", want: ""},

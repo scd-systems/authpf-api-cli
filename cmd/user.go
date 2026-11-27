@@ -2,11 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/scd-systems/authpf-api/pkg/config"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var userCmd = &cobra.Command{
@@ -67,6 +65,12 @@ var userCreateCmd = &cobra.Command{
 		}
 
 		cfg.Rbac.Users[username] = newUser
+
+		if err := validateForServer(cfg); err != nil {
+			// The rule text already names the field, a usage block would only bury it.
+			cmd.SilenceUsage = true
+			return errServerReject(err)
+		}
 
 		// Save config
 		if err := saveConfig(configPath, cfg); err != nil {
@@ -138,6 +142,11 @@ var userModifyCmd = &cobra.Command{
 
 		config.Rbac.Users[username] = user
 
+		if err := validateForServer(config); err != nil {
+			cmd.SilenceUsage = true
+			return errServerReject(err)
+		}
+
 		// Save config
 		if err := saveConfig(configPath, config); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
@@ -189,6 +198,11 @@ var userDeleteCmd = &cobra.Command{
 
 		// Delete user
 		delete(config.Rbac.Users, username)
+
+		if err := validateForServer(config); err != nil {
+			cmd.SilenceUsage = true
+			return errServerReject(err)
+		}
 
 		// Save config
 		if err := saveConfig(configPath, config); err != nil {
@@ -262,76 +276,4 @@ func init() {
 	userCmd.AddCommand(userModifyCmd)
 	userCmd.AddCommand(userDeleteCmd)
 	userCmd.AddCommand(userListCmd)
-}
-
-// Helper functions
-func loadConfig(configPath string) (*config.ConfigFile, error) {
-	if err := checkConfigTarget(configPath); err != nil {
-		return nil, err
-	}
-
-	yamlFile, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	config := &config.ConfigFile{}
-	err = yaml.Unmarshal(yamlFile, config)
-	if err != nil {
-		return nil, err
-	}
-
-	return config, nil
-}
-
-func saveConfig(configPath string, config *config.ConfigFile) error {
-	// Read the entire file to preserve other sections
-	if err := checkConfigTarget(configPath); err != nil {
-		return err
-	}
-
-	yamlFile, err := os.ReadFile(configPath)
-	if err != nil {
-		return err
-	}
-
-	// Unmarshal into a generic map to preserve all sections
-	var fullConfig map[string]interface{}
-	err = yaml.Unmarshal(yamlFile, &fullConfig)
-	if err != nil {
-		return err
-	}
-
-	// Update only the rbac section
-	rbacData := make(map[string]interface{})
-	rbacData["roles"] = config.Rbac.Roles
-
-	// Convert users to the proper format
-	usersData := make(map[string]interface{})
-	for username, user := range config.Rbac.Users {
-		userData := make(map[string]interface{})
-		userData["password"] = user.Password
-		userData["role"] = user.Role
-		if user.UserID > 0 {
-			userData["userId"] = user.UserID
-		}
-		usersData[username] = userData
-	}
-	rbacData["users"] = usersData
-
-	fullConfig["rbac"] = rbacData
-
-	// Marshal back to YAML
-	yamlData, err := yaml.Marshal(fullConfig)
-	if err != nil {
-		return err
-	}
-
-	// Write to file
-	err = os.WriteFile(configPath, yamlData, 0640)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
