@@ -24,24 +24,44 @@ var authCmd = &cobra.Command{
 	Long:  "Login, logout, and manage authentication tokens",
 }
 
+// loginRefusesArguments is the Args check of auth login. cobra.NoArgs would quote the
+// offending argument inside its error, and on this command that argument is typically the
+// password someone just tried not to hide, so the leftover is refused without naming it.
+func loginRefusesArguments(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("%s takes no arguments: give -p to be asked for the password", cmd.CommandPath())
+	}
+	return nil
+}
+
 var authLoginCmd = &cobra.Command{
-	Use:           "login",
-	Short:         "Login to server",
-	Long:          "Authenticate against the authpf-api server and obtain a JWT token",
+	Use:   "login",
+	Short: "Login to server",
+	Long: "Authenticate against the authpf-api server and obtain a JWT token.\n\n" +
+		"The password is typed in with -p or taken from " + passwordEnvVar + ", never given as a\n" +
+		"command line value",
+	Args:          loginRefusesArguments,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// hash password if flag used
-		if DetermineValueSource(cmd, "password", "AUTHPF_API_PASSWORD", VIPER_PARAM_PASSWORD) == "FLAG" {
-			pw, _ := cmd.Flags().GetString("password")
-			pwHash, err := createSha256(pw)
+		// -p carries no value on purpose, it only switches the prompt on. A password given
+		// as a value would sit in the argument vector where any local user can read it.
+		if prompt, _ := cmd.Flags().GetBool("password"); prompt {
+			clearText, err := promptSecret(cmd.OutOrStderr(), readTerminalSecret)
+			if err != nil {
+				return err
+			}
+			// The server bcrypt-compares what arrives on the wire, so the wire carries the
+			// SHA-256 of what was typed - the same value a stored credential holds.
+			pwHash, err := createSha256(clearText)
 			if err != nil {
 				return err
 			}
 			viper.Set(VIPER_PARAM_PASSWORD, pwHash)
 		}
 
-		// Try to load credentials from file if not provided via flags or environment variables
+		// Without a typed in password and without a value from the environment or the config
+		// file, the credentials file of the last successful login answers.
 		if viper.GetString(VIPER_PARAM_USERNAME) == "" || viper.GetString(VIPER_PARAM_PASSWORD) == "" {
 			creds, err := loadCredentialsFromFile()
 			if err == nil {
@@ -176,7 +196,7 @@ var authTokenCmd = &cobra.Command{
 func init() {
 	authLoginCmd.Flags().StringP("server", "s", "", "Server URL")
 	authLoginCmd.Flags().StringP("username", "u", "", "Username")
-	authLoginCmd.Flags().StringP("password", "p", "", "Password")
+	authLoginCmd.Flags().BoolP("password", "p", false, "Prompt for the password, hidden")
 	authLoginCmd.Flags().StringP("cacert", "c", "", "Path to CA certificate file for HTTPS verification")
 	authLoginCmd.Flags().BoolP("insecure", "i", false, "Skip HTTPS certificate verification (insecure, use with caution)")
 
@@ -186,9 +206,9 @@ func init() {
 	if err := viper.BindPFlag(VIPER_PARAM_USERNAME, authLoginCmd.Flags().Lookup("username")); err != nil {
 		log.Fatal(err.Error())
 	}
-	if err := viper.BindPFlag(VIPER_PARAM_PASSWORD, authLoginCmd.Flags().Lookup("password")); err != nil {
-		log.Fatal(err.Error())
-	}
+	// The password is deliberately not bound to viper: a bound flag answers viper.GetString
+	// with its own value, so a bool -p would have offered the password "true" to the login,
+	// and validatePassword passes that string on both of its checks.
 	if err := viper.BindPFlag(VIPER_PARAM_CACERT, authLoginCmd.Flags().Lookup("cacert")); err != nil {
 		log.Fatal(err.Error())
 	}

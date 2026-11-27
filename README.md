@@ -32,11 +32,11 @@ This creates the executable `authpf-api-cli` under `./build` folder.
 Work with a remote server:
 
 ```bash
-# 1. Login to the server
-authpf-api-cli auth login --server https://api.example.com --username john --password mypassword
+# 1. Login to the server (-p asks for the password, hidden)
+authpf-api-cli auth login --server https://api.example.com --username john -p
 
 # Login with a custom CA certificate
-authpf-api-cli auth login --server https://api.example.com --username john --password mypassword -c ca-root.crt
+authpf-api-cli auth login --server https://api.example.com --username john -p -c ca-root.crt
 
 # 2. Check login status
 authpf-api-cli auth status
@@ -95,7 +95,7 @@ authpf-api-cli config show
 
 ```bash
 # Step 1: Login to the server (only required for first time)
-authpf-api-cli auth login --server https://api.example.com --username alice --password pass123
+authpf-api-cli auth login --server https://api.example.com --username alice -p
 
 # To get a new token (if already configured server and username/password -> step 1)
 authpf-api-cli auth login 
