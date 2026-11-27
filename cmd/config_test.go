@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/scd-systems/authpf-api/pkg/config"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 // Everything a --config-path can be and become lives here: which file the tool may read and
@@ -158,6 +160,395 @@ func TestSaveConfigRefusesAReadOnlyConfigFile(t *testing.T) {
 		t.Errorf("read-only config was rewritten:\n%s", got)
 	}
 	assertNoStrayFiles(t, filepath.Dir(path), "authpf-api.conf")
+}
+
+// What a saved file must keep beyond its top-level sections. The save rebuilds rbac, and the
+// struct it is driven from models password, role and userId of a user and nothing else.
+// Everything the file says beyond that has to survive, because the server acts on it: userIp is
+// the address handed to pfctl as -D user_ip= and the address added to the pf table, macros become
+// -D arguments for that user's rules file, and pfTable picks the table the address is added to.
+// Losing any of them is not cosmetic drift, it is a change of firewall policy for accounts no one
+// named - and the server accepts the reduced file, so nothing reports it.
+//
+// The fixture below puts one account per interesting field, plus keys no version of the struct
+// models at all.
+const policyConfig = `rbac:
+  lastReviewed: checked by hand in november
+  roles:
+    admin:
+      permissions:
+        - view
+      description: read-only auditor
+    user:
+      permissions:
+        - view
+  users:
+    authpf-admin:
+      password: "$2a$12$abcdefghijklmnopqrstuv"
+      role: admin
+      userId: 1000
+      pfTable: authpf_admins
+    authpf-user1:
+      password: "$2a$12$zyxwvutsrqponmlkjihg"
+      role: user
+      userId: 1001
+      userIp: 192.168.0.10
+      macros:
+        server_1_addr: 10.127.2.1
+        server_1_port: 22
+      futureField: a key this tool has never heard of
+`
+
+// rbacSection reads the rbac section of a written file back as raw YAML, for the keys the typed
+// struct cannot show.
+func rbacSection(t *testing.T, path string) map[string]interface{} {
+	t.Helper()
+
+	var full map[string]interface{}
+	if err := yaml.Unmarshal([]byte(fileContents(t, path)), &full); err != nil {
+		t.Fatal(err)
+	}
+
+	rbac, ok := full["rbac"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("no rbac mapping in the saved file:\n%s", fileContents(t, path))
+	}
+
+	return rbac
+}
+
+// rbacUserSection is one user's entry as the file holds it.
+func rbacUserSection(t *testing.T, path, username string) map[string]interface{} {
+	t.Helper()
+
+	users, ok := rbacSection(t, path)["users"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("no rbac.users mapping in the saved file:\n%s", fileContents(t, path))
+	}
+
+	user, ok := users[username].(map[string]interface{})
+	if !ok {
+		t.Fatalf("no rbac.users.%s mapping in the saved file:\n%s", username, fileContents(t, path))
+	}
+
+	return user
+}
+
+func TestSaveConfigKeepsThePolicyFieldsOfUntouchedUsers(t *testing.T) {
+	path := writeTestConfig(t, policyConfig)
+
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() = %v", err)
+	}
+
+	// The one thing user create does: add an account.
+	cfg.Rbac.Users["carol"] = config.ConfigFileRbacUsers{
+		Password: "hash",
+		Role:     "user",
+		UserID:   3001,
+	}
+
+	if err := saveConfig(path, cfg); err != nil {
+		t.Fatalf("saveConfig() = %v", err)
+	}
+
+	after, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("the saved file no longer parses: %v", err)
+	}
+
+	admin := after.Rbac.Users["authpf-admin"]
+	if admin.PfTable != "authpf_admins" {
+		t.Errorf("pfTable of an untouched user = %q, want authpf_admins", admin.PfTable)
+	}
+
+	user1 := after.Rbac.Users["authpf-user1"]
+	if user1.UserIP != "192.168.0.10" {
+		t.Errorf("userIp of an untouched user = %q, want 192.168.0.10", user1.UserIP)
+	}
+	wantMacros := map[string]string{"server_1_addr": "10.127.2.1", "server_1_port": "22"}
+	if !maps.Equal(user1.Macros, wantMacros) {
+		t.Errorf("macros of an untouched user = %v, want %v", user1.Macros, wantMacros)
+	}
+
+	// The keys the save is about are still the ones it writes.
+	carol := after.Rbac.Users["carol"]
+	if carol.Password != "hash" || carol.Role != "user" || carol.UserID != 3001 {
+		t.Errorf("the new user was not written as given: %+v", carol)
+	}
+	if got := after.Rbac.Users["authpf-admin"]; got.Password == "hash" || got.Role != "admin" || got.UserID != 1000 {
+		t.Errorf("an untouched user's password, role or userId moved: %+v", got)
+	}
+
+	// And the keys no struct models are still there, at all three levels they can sit at.
+	if got := rbacSection(t, path)["lastReviewed"]; got != "checked by hand in november" {
+		t.Errorf("an unmodelled key under rbac = %v, want it kept", got)
+	}
+	if got := rbacUserSection(t, path, "authpf-user1")["futureField"]; got != "a key this tool has never heard of" {
+		t.Errorf("an unmodelled key under a user = %v, want it kept", got)
+	}
+	roles, ok := rbacSection(t, path)["roles"].(map[string]interface{})
+	if !ok {
+		t.Fatal("the save dropped rbac.roles")
+	}
+	adminRole, ok := roles["admin"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("rbac.roles.admin is no longer a mapping: %v", roles["admin"])
+	}
+	if got := adminRole["description"]; got != "read-only auditor" {
+		t.Errorf("an unmodelled key under a role = %v, want it kept", got)
+	}
+	perms, ok := adminRole["permissions"].([]interface{})
+	if !ok || len(perms) != 1 || perms[0] != "view" {
+		t.Errorf("rbac.roles.admin.permissions = %v, want [view]", adminRole["permissions"])
+	}
+}
+
+// A file whose roles are not declared in it must not be edited into declaring an empty role
+// store. The server refuses every user whose role no role in the file defines, so an injected
+// roles: {} is a server that no longer starts - over a change that only added one account.
+func TestSaveConfigWritesNoRolesSectionIntoAFileThatHasNone(t *testing.T) {
+	path := writeTestConfig(t, `rbac:
+  users:
+    authpf-admin:
+      password: "$2a$12$abcdefghijklmnopqrstuv"
+      role: admin
+      userIp: 192.168.0.10
+`)
+
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() = %v", err)
+	}
+	cfg.Rbac.Users["carol"] = config.ConfigFileRbacUsers{Password: "hash", Role: "user"}
+
+	if err := saveConfig(path, cfg); err != nil {
+		t.Fatalf("saveConfig() = %v", err)
+	}
+
+	rbac := rbacSection(t, path)
+	if roles, ok := rbac["roles"]; ok {
+		t.Errorf("the save wrote a roles section into a file that declares none: %v", roles)
+	}
+	after, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("the saved file no longer parses: %v", err)
+	}
+	if got := after.Rbac.Users["authpf-admin"].UserIP; got != "192.168.0.10" {
+		t.Errorf("userIp of an untouched user = %q, want 192.168.0.10", got)
+	}
+}
+
+// userId is the one modelled key a user can lose, so the save has to remove it rather than leave
+// a stored one standing: 0 means unset, and an account must not keep an id this tool decided it
+// does not have - two accounts sharing one id is what the write gate refuses to produce.
+func TestSaveConfigRemovesAUserIDTheConfigLeavesUnset(t *testing.T) {
+	path := writeTestConfig(t, policyConfig)
+
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() = %v", err)
+	}
+	user := cfg.Rbac.Users["authpf-user1"]
+	user.UserID = 0
+	cfg.Rbac.Users["authpf-user1"] = user
+
+	if err := saveConfig(path, cfg); err != nil {
+		t.Fatalf("saveConfig() = %v", err)
+	}
+
+	if _, ok := rbacUserSection(t, path, "authpf-user1")["userId"]; ok {
+		t.Error("userId survived a config that leaves it unset")
+	}
+	if got := rbacUserSection(t, path, "authpf-user1")["userIp"]; got != "192.168.0.10" {
+		t.Errorf("removing userId took userIp with it: %v", got)
+	}
+}
+
+// A user the file names but describes as nothing at all (rbac.users.ghost: with no mapping under
+// it) is the one entry shape the overlay cannot copy from. It has to come out as an entry rather
+// than a panic, exactly as the old code wrote it, and it must not disturb the users beside it.
+func TestSaveConfigSurvivesAUserEntryThatIsNotAMapping(t *testing.T) {
+	path := writeTestConfig(t, `rbac:
+  roles:
+    user:
+      permissions:
+        - view
+  users:
+    ghost:
+    authpf-user1:
+      password: "$2a$12$zyxwvutsrqponmlkjihg"
+      role: user
+      userId: 1001
+      userIp: 192.168.0.10
+`)
+
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() = %v", err)
+	}
+
+	if err := saveConfig(path, cfg); err != nil {
+		t.Fatalf("saveConfig() = %v", err)
+	}
+
+	if got := rbacUserSection(t, path, "authpf-user1")["userIp"]; got != "192.168.0.10" {
+		t.Errorf("userIp of the user beside it = %v, want 192.168.0.10", got)
+	}
+	if _, err := loadConfig(path); err != nil {
+		t.Errorf("the saved file no longer parses: %v", err)
+	}
+}
+
+// What that entry means for an operator, though, is a refusal rather than a write: an entry with
+// nothing under it decodes to a user with no role, and the write gate will not produce a file
+// whose user names a role the file does not define. Checked separately because the save itself has
+// to stay total, and the gate is what keeps the unusable result off the disk.
+func TestUserCommandsRefuseAFileWithAUserThatHasNoEntry(t *testing.T) {
+	path := writeTestConfig(t, `rbac:
+  roles:
+    user:
+      permissions:
+        - view
+  users:
+    ghost:
+    authpf-user1:
+      password: "$2a$12$zyxwvutsrqponmlkjihg"
+      role: user
+      userId: 1001
+      userIp: 192.168.0.10
+`)
+	before := fileContents(t, path)
+
+	if err := runUserCommand(t, userModifyCmd, "-c", path, "-u", "authpf-user1", "-p", "Passw0rd1"); err == nil {
+		t.Fatal("a command succeeded on a file whose user has no role")
+	}
+	if after := fileContents(t, path); after != before {
+		t.Errorf("the refused command changed the file:\n%s", after)
+	}
+}
+
+// An empty file holds nothing to overlay onto, and rbac alone is a config the server refuses to
+// start from. saveConfig has to report that instead of panicking on an assignment into a nil map.
+// No command reaches it today - the write gate refuses a file with no users first - so this pins
+// the function's own contract, which its comment describes as defence in depth.
+func TestSaveConfigRefusesAFileWithoutAnySections(t *testing.T) {
+	path := writeTestConfig(t, "# nothing here yet\n")
+
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() = %v", err)
+	}
+	cfg.Rbac.Users = map[string]config.ConfigFileRbacUsers{"carol": {Password: "hash", Role: "user"}}
+
+	if err := saveConfig(path, cfg); err == nil {
+		t.Fatal("saveConfig() wrote a file that has no sections to update")
+	}
+	if got := fileContents(t, path); got != "# nothing here yet\n" {
+		t.Errorf("the refused file changed:\n%s", got)
+	}
+}
+
+// A numeric- or bool-shaped key turns a whole YAML mapping into a map[interface{}]interface{} when
+// yaml.v3 decodes it, and such keys are reachable in a hand-edited file: a user named only with
+// digits satisfies the server's own username pattern, and "2024: audited" is the sort of note an
+// operator leaves behind. Reading just the string-keyed shape would see no rbac section at all and
+// write one fresh - the exact loss this function exists to prevent - so both shapes have to be
+// carried. The keys come back quoted, which is the same file to the server: its typed decode keys
+// those maps by string too, and validateForServer runs on that decode.
+func TestSaveConfigKeepsASubtreeWhoseKeysAreNotStrings(t *testing.T) {
+	path := writeTestConfig(t, `rbac:
+  2024: audited by hand
+  roles:
+    admins:
+      description: read-only auditor
+      permissions:
+        - view
+  users:
+    1001:
+      password: "$2a$12$abcdefghijklmnopqrstuv"
+      role: admins
+      userIp: 192.0.2.7
+      pfTable: authpf_admins
+`)
+
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("loadConfig() = %v", err)
+	}
+	cfg.Rbac.Users["newcomer"] = config.ConfigFileRbacUsers{Password: "hash", Role: "admins"}
+
+	if err := saveConfig(path, cfg); err != nil {
+		t.Fatalf("saveConfig() = %v", err)
+	}
+
+	after, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("the saved file no longer parses: %v", err)
+	}
+	if got := after.Rbac.Users["1001"].UserIP; got != "192.0.2.7" {
+		t.Errorf("userIp of the digit-named user = %q, want 192.0.2.7", got)
+	}
+	if got := after.Rbac.Users["1001"].PfTable; got != "authpf_admins" {
+		t.Errorf("pfTable of the digit-named user = %q, want authpf_admins", got)
+	}
+	if got := rbacSection(t, path)["2024"]; got != "audited by hand" {
+		t.Errorf("the note under rbac = %v, want it kept", got)
+	}
+	if _, ok := after.Rbac.Users["2024"]; ok {
+		t.Error("the note under rbac was read as a user")
+	}
+
+	// The written file is still one the server would accept and these commands would write again.
+	if err := validateForServer(after); err != nil {
+		t.Errorf("the saved file fails the write gate: %v", err)
+	}
+}
+
+// The same guarantee one level up, through the commands an operator runs. The realistic case is
+// not an adversary but a documented account addition or password rotation that quietly rewrites
+// every other account's policy, so each command is run against an unrelated account here.
+func TestUserCommandsKeepThePolicyFieldsOfUntouchedUsers(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  *cobra.Command
+		args []string
+	}{
+		{"create", userCreateCmd, []string{"-u", "carol", "-p", "Passw0rd1", "-r", "user", "-i", "3001"}},
+		{"modify", userModifyCmd, []string{"-u", "authpf-admin", "-p", "Passw0rd1"}},
+		{"delete", userDeleteCmd, []string{"-u", "authpf-admin"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeTestConfig(t, policyConfig)
+
+			if err := runUserCommand(t, tc.cmd, append([]string{"-c", path}, tc.args...)...); err != nil {
+				t.Fatalf("user %s failed: %v", tc.name, err)
+			}
+
+			after, err := loadConfig(path)
+			if err != nil {
+				t.Fatalf("the saved file no longer parses: %v", err)
+			}
+
+			user1 := after.Rbac.Users["authpf-user1"]
+			if user1.UserIP != "192.168.0.10" {
+				t.Errorf("userIp = %q, want the pinned 192.168.0.10", user1.UserIP)
+			}
+			wantMacros := map[string]string{"server_1_addr": "10.127.2.1", "server_1_port": "22"}
+			if !maps.Equal(user1.Macros, wantMacros) {
+				t.Errorf("macros = %v, want %v", user1.Macros, wantMacros)
+			}
+			if admin, ok := after.Rbac.Users["authpf-admin"]; ok && admin.PfTable != "authpf_admins" {
+				t.Errorf("pfTable of authpf-admin = %q, want authpf_admins", admin.PfTable)
+			}
+			if got := rbacUserSection(t, path, "authpf-user1")["futureField"]; got == nil {
+				t.Error("an unmodelled key under rbac.users was written away")
+			}
+		})
+	}
 }
 
 // assertNoStrayFiles wants the directory to hold exactly the named entries, so no case leaves

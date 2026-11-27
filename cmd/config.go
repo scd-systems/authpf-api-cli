@@ -112,8 +112,49 @@ func loadConfig(configPath string) (*config.ConfigFile, error) {
 	return config, nil
 }
 
-// saveConfig writes the rbac section back to configPath and leaves every other section of the
-// file exactly as it was.
+// yamlMapping hands a parsed YAML mapping back as a string-keyed map, or nil when the value is no
+// mapping at all.
+//
+// yaml.v3 decodes a mapping into map[string]interface{} only while every one of its keys is a
+// string. A single numeric- or bool-shaped key - a user named 1001, which the server's own
+// username pattern allows, or a "2024: audited" note someone left under rbac: - turns the whole
+// map into a map[interface{}]interface{}. Asserting on the string shape alone would then read
+// such a subtree as missing and write it fresh from the struct, which is exactly the loss
+// saveConfig exists to prevent. Re-keying costs nothing: the server's typed decode reads those
+// keys as strings as well, and yaml writes them back quoted.
+func yamlMapping(value interface{}) map[string]interface{} {
+	switch mapping := value.(type) {
+	case map[string]interface{}:
+		return mapping
+	case map[interface{}]interface{}:
+		converted := make(map[string]interface{}, len(mapping))
+		for key, entry := range mapping {
+			converted[fmt.Sprintf("%v", key)] = entry
+		}
+		return converted
+	default:
+		return nil
+	}
+}
+
+// saveConfig writes the rbac section back to configPath. Every other section of the file keeps
+// its content, though not its formatting; see the last paragraph.
+//
+// The section is rebuilt on top of the file's own parsed rbac subtree rather than out of the
+// struct the commands are driven by. ConfigFileRbacUsers does carry userIp, macros and pfTable,
+// but the loop that rebuilt the section named only password, role and userId, so the other three
+// were dropped from every user in the file on every write - the pinned source address of an
+// anchor, the macro definitions a user's rules file is loaded with, and the pf table the address
+// is added to, all settings the server hands straight to pfctl - and every key the struct does
+// not model at all went with them, under rbac: or under a role. A routine password change
+// therefore rewrote the whole file's access-control posture and exited 0, and the server still
+// accepted the result: it validates shape, not preservation.
+//
+// So the parsed file is the base and only the keys these commands actually edit are overlaid on
+// it. If a command ever starts editing userIp, macros or pfTable, it has to write them here too.
+//
+// What is still not preserved is how the file was written: the result is re-marshalled from
+// decoded values, so comments, anchors and key order normalise on every save.
 func saveConfig(configPath string, config *config.ConfigFile) error {
 	// Read the entire file to preserve other sections
 	if err := checkConfigTarget(configPath); err != nil {
@@ -131,19 +172,55 @@ func saveConfig(configPath string, config *config.ConfigFile) error {
 	if err != nil {
 		return err
 	}
+	if fullConfig == nil {
+		// An empty file holds no sections to overlay onto. Writing rbac alone into it would
+		// hand the server a file it refuses to start from, and reaching this line at all means
+		// a caller skipped the validation these commands run first.
+		return fmt.Errorf("%s contains no configuration to update", configPath)
+	}
 
-	// Update only the rbac section
-	rbacData := make(map[string]interface{})
-	rbacData["roles"] = config.Rbac.Roles
+	// Update only the rbac section, and update it on top of what the file already says.
+	rbacData := yamlMapping(fullConfig["rbac"])
+	if rbacData == nil {
+		// No rbac section, or one that is not a mapping. Either is written fresh; loadConfig
+		// would already have refused a scalar rbac section, so this is defence in depth.
+		rbacData = make(map[string]interface{})
+	}
 
-	// Convert users to the proper format
-	usersData := make(map[string]interface{})
+	// Roles are written only when the loaded config carries them, so a file that declares no
+	// roles here is not edited into declaring an empty role store, which the server rejects
+	// for every user in the file.
+	if config.Rbac.Roles != nil {
+		rolesRaw := yamlMapping(rbacData["roles"])
+		rolesData := make(map[string]interface{}, len(config.Rbac.Roles))
+		for roleName, role := range config.Rbac.Roles {
+			roleData := yamlMapping(rolesRaw[roleName])
+			if roleData == nil {
+				roleData = make(map[string]interface{})
+			}
+			roleData["permissions"] = role.Permissions
+			rolesData[roleName] = roleData
+		}
+		rbacData["roles"] = rolesData
+	}
+
+	// Convert users to the proper format, again on top of their own stored entries. userId is
+	// the one key that is removed rather than left alone: 0 means unset here, and an account
+	// must not keep an id this tool has decided it does not have.
+	usersRaw := yamlMapping(rbacData["users"])
+	usersData := make(map[string]interface{}, len(config.Rbac.Users))
 	for username, user := range config.Rbac.Users {
-		userData := make(map[string]interface{})
+		userData := yamlMapping(usersRaw[username])
+		if userData == nil {
+			// A new account, or a stored entry that is not a mapping.
+			userData = make(map[string]interface{})
+		}
 		userData["password"] = user.Password
 		userData["role"] = user.Role
 		if user.UserID > 0 {
 			userData["userId"] = user.UserID
+		} else {
+			delete(userData, "userId")
 		}
 		usersData[username] = userData
 	}

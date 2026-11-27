@@ -120,7 +120,7 @@ check_has "Usage:"
 check_no_panic
 done_case
 
-# vuln-0004: auth login saves a live bearer token, so it may not leave that file readable by
+# auth login saves a live bearer token, so it may not leave that file readable by
 # anybody else - not even when the directory and both files already existed loose, which is
 # what a home restore or an older release leaves behind.
 home_saved=$home
@@ -143,7 +143,7 @@ done
 home=$home_saved
 done_case
 
-# vuln-0005: -c/--config-path says which server config to edit, so what the tool accepts there
+# -c/--config-path says which server config to edit, so what the tool accepts there
 # is all that stands between the command and somebody else's file. Everything below runs
 # unprivileged in a scratch directory: an arbitrary destination is legitimate operator work and
 # stays possible, a link pointing somewhere else is not.
@@ -204,7 +204,7 @@ else
   skip "a fifo as config path is refused, not waited on" "mkfifo unavailable"
 fi
 
-# vuln-0015: nothing but the CLI stands between a typo and a server that stays down, since
+# nothing but the CLI stands between a typo and a server that stays down, since
 # the server refuses to start on an rbac.users section it does not accept and the file has
 # already been rewritten by then. What the command rejects must therefore leave the file
 # exactly as it was: those are the last bytes the server can still start from.
@@ -239,6 +239,23 @@ run "user delete removes one user of two" 0 "" "" user delete -c "$conf" -u seco
 check_has "User deleted successfully"
 check_no_panic
 grep -q operator "$conf" || fail "the user that stayed was lost"
+done_case
+
+# the save rebuilds the whole rbac section, so every key in it that this tool does not
+# edit has to come back out of the file unchanged. userIp pins which address an anchor is bound
+# to, macros are the definitions its rules file is loaded with, and pfTable picks the pf table the
+# address is added to - all three are handed to pfctl by the server, so writing them away changed
+# the firewall policy of accounts no command had named, with exit code 0.
+pconf=$srv/policy.conf
+printf 'rbac:\n  roles:\n    admins:\n      description: read-only auditor\n      permissions:\n        - view_own_rules\n  users:\n    pinned:\n      password: "$2a$12$abcdefghijklmnopqrstuv"\n      role: admins\n      userId: 1001\n      userIp: 192.0.2.7\n      pfTable: authpf_admins\n      macros:\n        pinned_port: 8443\n' >"$pconf"
+chmod 600 "$pconf"
+run "user create keeps the policy of the accounts it did not touch" 0 "" "" user create -c "$pconf" -u newcomer -p pw12345 -r admins
+check_has "User created successfully"
+check_no_panic
+for want in 'userIp: 192.0.2.7' 'pfTable: authpf_admins' 'pinned_port: 8443'; do
+  grep -q "$want" "$pconf" || fail "the save dropped $want"
+done
+grep -q 'description: read-only auditor' "$pconf" || fail "the save dropped a role key this tool does not model"
 done_case
 
 # --version is the command reached for while finding out why a server is down, so it may not
