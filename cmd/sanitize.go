@@ -41,7 +41,7 @@ const maxReportedErrorChars = 512
 func ReportError(err error) {
 	msg := err.Error()
 	if r := []rune(msg); len(r) > maxReportedErrorChars {
-		msg = string(r[:maxReportedErrorChars]) + alt(" …", "...")
+		msg = string(r[:maxReportedErrorChars]) + ellipsis()
 	}
 	fmt.Fprintf(os.Stderr, mark("❌ ")+"Error: %s\n", sanitizeDisplay(msg))
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,10 +14,25 @@ import (
 // TestMain pins the locale for this package. Most of the tests here assert on the symbols the
 // CLI prints on purpose, and a build machine whose own LANG says ISO-8859-1 would switch the
 // plain fallback on and make those tests fail for a reason unrelated to them.
+//
+// An empty variable counts as an unset one for both decisions the package makes, so pinning
+// means setting all three and asking about the failure: a run that cannot fix its own
+// environment would judge the decorations against a locale nobody intended.
 func TestMain(m *testing.M) {
-	os.Setenv("LC_ALL", "C.UTF-8")
-	os.Unsetenv("LANG")
-	os.Unsetenv(decorationEnv)
+	pinned := []struct {
+		key, value string
+	}{
+		{"LC_ALL", "C.UTF-8"},
+		{"LANG", ""},
+		{decorationEnv, ""},
+	}
+
+	for _, pin := range pinned {
+		if err := os.Setenv(pin.key, pin.value); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "cannot pin %s for the test run: %v\n", pin.key, err)
+			os.Exit(1)
+		}
+	}
 
 	os.Exit(m.Run())
 }
@@ -135,7 +151,7 @@ func TestDecorationIsDecidedOncePerRun(t *testing.T) {
 	}
 }
 
-func TestMarkAndAltFollowTheDecision(t *testing.T) {
+func TestMarkAndEllipsisFollowTheDecision(t *testing.T) {
 	decorateWith(t, false)
 
 	if got := mark("✅ "); got != "✅ " {
@@ -144,8 +160,8 @@ func TestMarkAndAltFollowTheDecision(t *testing.T) {
 	if got := mark(""); got != "" {
 		t.Errorf("mark() invented something for an empty symbol: %q", got)
 	}
-	if got := alt(" …", "..."); got != " …" {
-		t.Errorf("alt() = %q, want the UTF-8 form", got)
+	if got := ellipsis(); got != " …" {
+		t.Errorf("ellipsis() = %q, want the UTF-8 form", got)
 	}
 
 	decorateWith(t, true)
@@ -155,8 +171,8 @@ func TestMarkAndAltFollowTheDecision(t *testing.T) {
 			t.Errorf("plain output still carries %q", got)
 		}
 	}
-	if got := alt(" …", "..."); got != "..." {
-		t.Errorf("alt() = %q, want the ASCII stand-in", got)
+	if got := ellipsis(); got != "..." {
+		t.Errorf("ellipsis() = %q, want the ASCII stand-in", got)
 	}
 }
 
@@ -222,7 +238,7 @@ func TestInvisibleCharactersAreStillMarked(t *testing.T) {
 	}
 }
 
-// The symbols are only reachable through mark() and alt(), and a line that gets one without
+// The symbols are only reachable through mark(), and a line that gets one without
 // that wrapper is a line some future terminal will show as mojibake. Checked against the
 // source because the plain fallback is invisible in a test run on a UTF-8 machine otherwise.
 func TestStatusSymbolsAreReachedThroughTheDecisionOnly(t *testing.T) {
@@ -242,7 +258,7 @@ func TestStatusSymbolsAreReachedThroughTheDecisionOnly(t *testing.T) {
 		}
 
 		for number, line := range strings.Split(string(source), "\n") {
-			if !carriesStatusSymbol(line) || strings.Contains(line, "mark(") || strings.Contains(line, "alt(") {
+			if !carriesStatusSymbol(line) || strings.Contains(line, "mark(") {
 				continue
 			}
 

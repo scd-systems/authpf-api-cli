@@ -23,15 +23,15 @@ func mark(symbol string) string {
 	return symbol
 }
 
-// alt stands where a symbol carries meaning of its own and an ASCII stand-in has to replace it
-// rather than go missing: the ellipsis that marks a cut-off message. Next to mark(), because
-// both ask plainDecorations() and neither goes through the other.
-func alt(fancy, plain string) string {
+// ellipsis closes a message the tool cut short. Unlike the status symbols it carries a meaning
+// of its own - "there was more to read" - so it cannot simply go missing: a code page that
+// cannot draw U+2026 gets three dots, which says the same thing in seven bits.
+func ellipsis() string {
 	if plainDecorations() {
-		return plain
+		return "..."
 	}
 
-	return fancy
+	return " …"
 }
 
 var (
