@@ -20,6 +20,8 @@ The tool provides functionality for:
 - **User Management**: Create, modify, and delete users with secure password hashing
 - **Status Monitoring**: Check server and client status, view active sessions and loaded anchors
 
+Output is UTF-8 and leads the lines worth scanning for with a checkmark, a cross or a warning sign. A terminal that cannot take UTF-8 is given the same lines as plain words instead, because those three bytes decode there into `ÔØî` rather than a symbol. The tool decides that once, before it prints anything, from `LC_ALL`, `LC_CTYPE` and `LANG` and - on Windows - from the console code page; **AUTHPF_CLI_PLAIN** forces the plain form for a terminal that decodes UTF-8 well but has no glyphs for the symbols.
+
 ## GLOBAL OPTIONS
 
 **--config** _file_
@@ -182,6 +184,9 @@ Display the current server configuration.
 
 **AUTHPF_API_AUTHPF_TIMEOUT**
 : Default timeout for authpf rule activation.
+
+**AUTHPF_CLI_PLAIN**
+: Print status lines without the ✅, ❌ and ⚠ symbols. The tool chooses that form by itself when the locale names a codeset older than Unicode (`LANG=C`, `en_US.ISO-8859-1`) or when a Windows console runs on a code page other than 65001, and it keeps the symbols when no locale is set at all. Set this for the case no detection can see: a terminal that decodes UTF-8 correctly but has no glyphs for those symbols, so an empty box stands where the checkmark was. Any value other than an empty string, `0` and `false` turns it on.
 
 ## CONFIGURATION
 

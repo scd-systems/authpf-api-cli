@@ -159,6 +159,19 @@ check_lacks "Passw0rd_1"
 check_no_panic
 done_case
 
+# The status symbols are decoration: every line they lead says in words what it says in
+# colour. A locale that declares a codeset older than Unicode has to be given those words
+# on their own, because the three bytes of a checkmark decode there into "Ã´Â¸Ã®".
+# This case cannot go through run(), which builds the child's environment of its own.
+out=$(env -i HOME="$home" LC_ALL=C "$bin" auth login -p </dev/null 2>&1) && got=0 || got=$?
+fails_here=0
+printf '  %-56s exit %s' "a locale without UTF-8 is given plain words" "$got"
+[ "$got" = 1 ] || fail "wanted exit code 1"
+check_has "Error: no terminal to type the password into"
+check_lacks "❌"
+check_no_panic
+done_case
+
 # -c/--config-path says which server config to edit, so what the tool accepts there
 # is all that stands between the command and somebody else's file. Everything below runs
 # unprivileged in a scratch directory: an arbitrary destination is legitimate operator work and

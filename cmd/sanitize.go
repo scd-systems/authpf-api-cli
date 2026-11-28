@@ -15,9 +15,17 @@ import (
 // being control characters at all. Newline and carriage return are replaced as well, so a
 // response cannot fabricate lines that look like this tool's own output.
 func sanitizeDisplay(s string) string {
+	// The open box is a symbol of its own, and the one thing it says is "here was something
+	// you cannot see". A terminal that cannot decode UTF-8 reads "â£" at exactly that spot,
+	// so it gets a question mark instead: ugly in every code page, but legible in all of them.
+	invisible := '\u2423' // open box: something invisible was here
+	if plainDecorations() {
+		invisible = '?'
+	}
+
 	return strings.Map(func(r rune) rune {
 		if !unicode.IsPrint(r) {
-			return '\u2423' // open box: something invisible was here
+			return invisible
 		}
 		return r
 	}, s)
@@ -33,7 +41,7 @@ const maxReportedErrorChars = 512
 func ReportError(err error) {
 	msg := err.Error()
 	if r := []rune(msg); len(r) > maxReportedErrorChars {
-		msg = string(r[:maxReportedErrorChars]) + " …"
+		msg = string(r[:maxReportedErrorChars]) + alt(" …", "...")
 	}
-	fmt.Fprintf(os.Stderr, "❌ Error: %s\n", sanitizeDisplay(msg))
+	fmt.Fprintf(os.Stderr, mark("❌ ")+"Error: %s\n", sanitizeDisplay(msg))
 }

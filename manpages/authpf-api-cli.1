@@ -22,6 +22,9 @@ The tool provides functionality for:
 .IP \(bu 2
 \fBStatus Monitoring\fP: Check server and client status, view active sessions and loaded anchors
 
+.PP
+Output is UTF-8 and leads the lines worth scanning for with a checkmark, a cross or a warning sign. A terminal that cannot take UTF-8 is given the same lines as plain words instead, because those three bytes decode there into "ÔØî" rather than a symbol. The tool decides that once, before it prints anything, from \fBLC_ALL\fP, \fBLC_CTYPE\fP and \fBLANG\fP and - on Windows - from the console code page; \fBAUTHPF_CLI_PLAIN\fP forces the plain form for a terminal that decodes UTF-8 well but has no glyphs for the symbols.
+
 .SH GLOBAL OPTIONS
 .TP
 \fB--config\fP \fIfile\fP
@@ -215,6 +218,10 @@ Default authpf username for operations.
 .TP
 \fBAUTHPF_API_AUTHPF_TIMEOUT\fP
 Default timeout for authpf rule activation.
+
+.TP
+\fBAUTHPF_CLI_PLAIN\fP
+Print status lines without the ✅, ❌ and ⚠ symbols. The tool chooses that form by itself when the locale names a codeset older than Unicode (\fILANG=C\fP, \fIen_US.ISO-8859-1\fP) or when a Windows console runs on a code page other than 65001, and it keeps the symbols when no locale is set at all. Set this for the case no detection can see: a terminal that decodes UTF-8 correctly but has no glyphs for those symbols, so an empty box stands where the checkmark was. Any value other than an empty string, \fI0\fP and \fIfalse\fP turns it on.
 
 .SH CONFIGURATION
 \fBauthpf-api-cli\fP is configured via a YAML configuration file, typically located at \fB~/.authpf-api-cli/config\fR\&. The configuration file stores:

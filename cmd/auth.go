@@ -100,22 +100,22 @@ var authLoginCmd = &cobra.Command{
 		}
 		viper.Set(VIPER_PARAM_AUTHPF_TOKEN, token)
 
-		fmt.Printf("✅ Successfully logged in as %s\n", viper.GetString(VIPER_PARAM_USERNAME))
+		fmt.Printf(mark("✅ ")+"Successfully logged in as %s\n", viper.GetString(VIPER_PARAM_USERNAME))
 
 		// Save token and auth settings to config file automatically
 		if err := saveAuthToken(); err != nil {
 			return fmt.Errorf("failed to save token: %v", err)
 		}
-		fmt.Println("✅ Token saved to config file")
+		fmt.Println(mark("✅ ") + "Token saved to config file")
 
 		// Save credentials to credentials file if provided via flags
 		if viper.GetString(VIPER_PARAM_USERNAME) != "" && viper.GetString(VIPER_PARAM_PASSWORD) != "" {
 			if err := saveCredentialsToFile(viper.GetString(VIPER_PARAM_USERNAME), viper.GetString(VIPER_PARAM_PASSWORD)); err != nil {
 				// Don't fail the login if credentials file save fails.
 				// Stderr is the reporting channel itself, so there is nowhere to report a write error.
-				_, _ = fmt.Fprintf(cmd.OutOrStderr(), "⚠️ Warning: failed to save credentials file: %v\n", err)
+				_, _ = fmt.Fprintf(cmd.OutOrStderr(), mark("⚠️ ")+"Warning: failed to save credentials file: %v\n", err)
 			} else {
-				fmt.Println("✅ Credentials saved to credentials file")
+				fmt.Println(mark("✅ ") + "Credentials saved to credentials file")
 			}
 		}
 
@@ -139,7 +139,7 @@ var authLogoutCmd = &cobra.Command{
 			return fmt.Errorf("failed to logout: %w", err)
 		}
 
-		fmt.Println("✅ Successfully logged out")
+		fmt.Println(mark("✅ ") + "Successfully logged out")
 		return nil
 	},
 }
@@ -538,7 +538,7 @@ func (v tokenValidation) remaining() time.Duration {
 // accepted it. A client clock that disagrees with the server is reported as a warning and
 // never changes the verdict.
 func (v tokenValidation) printValid() {
-	fmt.Println("Token Validation: ✅ Valid")
+	fmt.Println("Token Validation: " + mark("✅ ") + "Valid")
 	fmt.Fprint(os.Stderr, clockSkewWarning(v.serverTime))
 
 	if v.expiresAt.IsZero() {
@@ -572,14 +572,14 @@ func clockSkewWarning(serverTime time.Time) string {
 		if -skew <= maxClockSkew {
 			return ""
 		}
-		return fmt.Sprintf("⚠️  Time difference: client clock is %s BEHIND server clock (client %s, server %s), check NTP\n",
+		return fmt.Sprintf(mark("⚠️  ")+"Time difference: client clock is %s BEHIND server clock (client %s, server %s), check NTP\n",
 			formatDuration(-skew), clientTime.Format(time.RFC3339), serverTime.Format(time.RFC3339))
 	}
 	if skew <= maxClockSkew {
 		return ""
 	}
 
-	return fmt.Sprintf("⚠️  Time difference: client clock is %s AHEAD of server clock (client %s, server %s), check NTP\n",
+	return fmt.Sprintf(mark("⚠️  ")+"Time difference: client clock is %s AHEAD of server clock (client %s, server %s), check NTP\n",
 		formatDuration(skew), clientTime.Format(time.RFC3339), serverTime.Format(time.RFC3339))
 }
 

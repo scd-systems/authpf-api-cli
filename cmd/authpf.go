@@ -70,7 +70,7 @@ var authpfActivateCmd = &cobra.Command{
 			if err := loginWithStoredCredentials(); err != nil {
 				return fmt.Errorf("no token stored and automatic login failed: %w", err)
 			}
-			fmt.Println("✅ Logged in from stored credentials")
+			fmt.Println(mark("✅ ") + "Logged in from stored credentials")
 		}
 
 		// Get optional parameters
@@ -88,7 +88,7 @@ var authpfActivateCmd = &cobra.Command{
 			return fmt.Errorf("%v", err)
 		}
 
-		fmt.Println("✅ AuthPF anchor activated successfully")
+		fmt.Println(mark("✅ ") + "AuthPF anchor activated successfully")
 		return nil
 	},
 }
@@ -114,7 +114,7 @@ var authpfDeactivateCmd = &cobra.Command{
 			return fmt.Errorf("%v", err)
 		}
 
-		fmt.Println("✅ AuthPF anchor deactivated successfully")
+		fmt.Println(mark("✅ ") + "AuthPF anchor deactivated successfully")
 		return nil
 	},
 }
@@ -157,7 +157,7 @@ var authpfStatusCmd = &cobra.Command{
 
 		// Check if status is nil (no active anchor)
 		if statusData == nil {
-			fmt.Println("❌ AuthPF anchor status: inactive")
+			fmt.Println(mark("❌ ") + "AuthPF anchor status: inactive")
 			fmt.Println("  No active anchor found")
 			return nil
 		}
@@ -170,7 +170,7 @@ var authpfStatusCmd = &cobra.Command{
 
 		// Check if anchors map is empty
 		if len(apiResponse.Anchors) == 0 {
-			fmt.Println("❌ AuthPF anchor status: inactive")
+			fmt.Println(mark("❌ ") + "AuthPF anchor status: inactive")
 			fmt.Println("  No active anchor found")
 			return nil
 		}
@@ -197,12 +197,12 @@ var authpfStatusCmd = &cobra.Command{
 				}
 			}
 			if active == 0 {
-				fmt.Println("❌ AuthPF anchor status: inactive")
+				fmt.Println(mark("❌ ") + "AuthPF anchor status: inactive")
 				fmt.Println("  No active anchor found")
 				return nil
 			}
 
-			fmt.Println("✅ AuthPF anchor status: active")
+			fmt.Println(mark("✅ ") + "AuthPF anchor status: active")
 			fmt.Printf("  Total active anchors: %d\n\n", active)
 			for key, status := range apiResponse.Anchors {
 				fmt.Printf("  Anchor: %s\n", key)
@@ -224,7 +224,7 @@ var authpfStatusCmd = &cobra.Command{
 			}
 
 			if status == nil {
-				fmt.Println("❌ AuthPF status: inactive")
+				fmt.Println(mark("❌ ") + "AuthPF status: inactive")
 				fmt.Println("  No active anchors found")
 				return nil
 			}
@@ -374,7 +374,7 @@ func getAuthPFAnchorStatus(all bool) (interface{}, error) {
 // formatAuthPFStatus formats the status for display
 func formatAuthPFStatus(status *AuthPFStatus, serverTime time.Time) string {
 	// Format the output
-	output := "✅ AuthPF anchor status: active\n"
+	output := mark("✅ ") + "AuthPF anchor status: active\n"
 	output += fmt.Sprintf("  Username: %s\n", status.Username)
 	output += fmt.Sprintf("  UserIP: %s\n", status.UserIP)
 	output += fmt.Sprintf("  UserID: %d\n", status.UserID)

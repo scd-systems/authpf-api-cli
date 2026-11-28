@@ -145,7 +145,7 @@ func serverProbeNote(err error) string {
 
 	msg := sanitizeDisplay(err.Error())
 	if r := []rune(msg); len(r) > maxReportedErrorChars {
-		msg = string(r[:maxReportedErrorChars]) + " …"
+		msg = string(r[:maxReportedErrorChars]) + alt(" …", "...")
 	}
 
 	return fmt.Sprintf("server not reachable, version information not fetched: %s", msg)
